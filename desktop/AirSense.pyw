@@ -15,7 +15,7 @@ Developer : Nikolaos K. Paridis (aka nikkpap) — ALU DEV TEAM
 APP_NAME = "AirSense"
 OLD_APP_NAMES = ("ALU HygroLink", "ALU AirSense")   # παλιά ονόματα (μεταφορά δεδομένων/ρυθμίσεων)
 OLD_APP_NAME = OLD_APP_NAMES[0]
-APP_VERSION = "1.6.0"
+APP_VERSION = "1.6.1"
 AUTHOR = "Nikolaos K. Paridis (aka nikkpap)"
 TEAM = "ALU DEV TEAM"
 
@@ -30,7 +30,8 @@ import importlib.util
 # ═══════════════════════════════════════════════════════════════════════════
 # 1) Αυτόματη εγκατάσταση βιβλιοθηκών (πρώτη εκκίνηση)
 # ═══════════════════════════════════════════════════════════════════════════
-REQUIRED = [("PyQt6", "PyQt6"), ("pyqtgraph", "pyqtgraph"), ("numpy", "numpy"), ("qrcode", "qrcode")]
+REQUIRED = [("PyQt6", "PyQt6"), ("pyqtgraph", "pyqtgraph"), ("numpy", "numpy"), ("qrcode", "qrcode"),
+            ("reportlab", "reportlab")]
 
 
 LOG_FILE = os.path.join(os.environ.get("TEMP") or os.path.expanduser("~"), "AirSense_log.txt")
@@ -291,7 +292,7 @@ DEFAULT_CFG = {
     "email": {
         "enabled": False, "host": "smtp.gmail.com", "port": 587, "security": "STARTTLS",
         "user": "", "password": "", "sender": "", "to": "",
-        "daily_report": True, "report_time": "08:00", "alarm_mails": True,
+        "daily_report": True, "report_time": "08:00", "alarm_mails": True, "attach_pdf": True,
     },
     "alarms": {
         "enabled": False, "temp_min": 5.0, "temp_max": 35.0, "hum_min": 20.0, "hum_max": 80.0,
@@ -1330,6 +1331,533 @@ def xml_bytes(rows, t0=None, t1=None, wxf=None, place=None):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# 7b) Αναφορά PDF (reportlab — όμορφη αναφορά με κάρτες, γραφήματα και πίνακα ημερών)
+# ═══════════════════════════════════════════════════════════════════════════
+def _need_reportlab():
+    """Φορτώνει το reportlab· αν λείπει (π.χ. headless/Pi), το εγκαθιστά μόνο του."""
+    if importlib.util.find_spec("reportlab") is None:
+        _log("Λείπει το reportlab — εγκατάσταση…")
+        flags = 0x08000000 if os.name == "nt" else 0
+        py = sys.executable
+        if py.lower().endswith("pythonw.exe") and os.path.exists(py[:-len("pythonw.exe")] + "python.exe"):
+            py = py[:-len("pythonw.exe")] + "python.exe"
+        for extra in ([], ["--user"], ["--break-system-packages"], ["--user", "--break-system-packages"]):
+            try:
+                r = subprocess.run([py, "-m", "pip", "install", "--disable-pip-version-check", "reportlab"] + extra,
+                                   capture_output=True, text=True, timeout=600, creationflags=flags)
+                if r.returncode == 0:
+                    break
+            except Exception:
+                pass
+        importlib.invalidate_caches()
+        try:
+            import site
+            importlib.reload(site)
+        except Exception:
+            pass
+    if importlib.util.find_spec("reportlab") is None:
+        raise RuntimeError("Για PDF χρειάζεται η βιβλιοθήκη reportlab (pip install reportlab"
+                           + (" ή sudo apt install python3-reportlab" if sys.platform.startswith("linux") else "") + ")")
+
+
+_PDF_FONTS = {}
+
+
+def _pdf_fonts():
+    """Γραμματοσειρές με ελληνικά: Segoe UI / Arial (Windows), DejaVu (Linux/Pi), Arial (macOS)."""
+    if _PDF_FONTS:
+        return _PDF_FONTS["r"], _PDF_FONTS["b"]
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    win = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
+    cands = [
+        (os.path.join(win, "segoeui.ttf"), os.path.join(win, "segoeuib.ttf")),
+        (os.path.join(win, "arial.ttf"), os.path.join(win, "arialbd.ttf")),
+        ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+        ("/usr/share/fonts/dejavu/DejaVuSans.ttf", "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf"),
+        ("/usr/share/fonts/TTF/DejaVuSans.ttf", "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf"),
+        ("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+         "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"),
+        ("/System/Library/Fonts/Supplemental/Arial.ttf", "/System/Library/Fonts/Supplemental/Arial Bold.ttf"),
+        ("/Library/Fonts/Arial.ttf", "/Library/Fonts/Arial Bold.ttf"),
+    ]
+    for reg, bold in cands:
+        if os.path.exists(reg):
+            pdfmetrics.registerFont(TTFont("ASans", reg))
+            pdfmetrics.registerFont(TTFont("ASans-B", bold if os.path.exists(bold) else reg))
+            from reportlab.lib.fonts import addMapping
+            addMapping("ASans", 0, 0, "ASans")
+            addMapping("ASans", 1, 0, "ASans-B")
+            addMapping("ASans", 0, 1, "ASans")
+            addMapping("ASans", 1, 1, "ASans-B")
+            _PDF_FONTS.update(r="ASans", b="ASans-B")
+            return "ASans", "ASans-B"
+    raise RuntimeError("Δεν βρέθηκε γραμματοσειρά με ελληνικά (π.χ. sudo apt install fonts-dejavu-core)")
+
+
+def _stats(vals):
+    v = [x for x in vals if x is not None]
+    if not v:
+        return None, None, None
+    return min(v), sum(v) / len(v), max(v)
+
+
+def _downsample(pts, n=360):
+    """(ts, v) → έως n σημεία (μέσος όρος ανά «κουβά»), με κενά όπου λείπουν δεδομένα."""
+    pts = [(t, v) for t, v in pts if v is not None]
+    if len(pts) <= n:
+        return pts
+    t0, t1 = pts[0][0], pts[-1][0]
+    step = max(1.0, (t1 - t0) / n)
+    out, cur, acc = [], None, []
+    for t, v in pts:
+        b = int((t - t0) / step)
+        if b != cur and acc:
+            out.append((sum(a[0] for a in acc) / len(acc), sum(a[1] for a in acc) / len(acc)))
+            acc = []
+        cur = b
+        acc.append((t, v))
+    if acc:
+        out.append((sum(a[0] for a in acc) / len(acc), sum(a[1] for a in acc) / len(acc)))
+    return out
+
+
+def _nice_range(lo, hi, ticks=5):
+    if lo is None:
+        return 0, 1, 0.2
+    if hi - lo < 1e-6:
+        lo, hi = lo - 1, hi + 1
+    span = hi - lo
+    raw = span / ticks
+    mag = 10 ** math.floor(math.log10(raw))
+    step = min((s * mag for s in (1, 2, 2.5, 5, 10) if s * mag >= raw), default=raw)
+    return math.floor(lo / step) * step, math.ceil(hi / step) * step, step
+
+
+def build_pdf_report(info):
+    """Φτιάχνει την αναφορά PDF. info: dict με app, period, devices, weather, labels κ.λπ. → bytes"""
+    _need_reportlab()
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.platypus import (BaseDocTemplate, Frame, PageTemplate, Paragraph, Spacer, Table, TableStyle,
+                                    KeepTogether, PageBreak)
+    from reportlab.graphics.shapes import Drawing, Rect, Line, PolyLine, String, Polygon, Circle, Group
+    from reportlab.pdfgen import canvas as rl_canvas
+
+    FR, FB = _pdf_fonts()
+    C = lambda h, a=1.0: colors.Color(int(h[1:3], 16) / 255, int(h[3:5], 16) / 255, int(h[5:7], 16) / 255, alpha=a)
+    NAVY, BLUE, ORANGE, SKY, PURPLE, GREEN, GREY, LIGHT, LINE, TXT, RED, AMBER = (
+        C("#141b2d"), C("#2b6cff"), C("#ff8a1f"), C("#1f8fff"), C("#8b5cf6"), C("#1e9e55"), C("#6b7588"),
+        C("#f3f5f9"), C("#dfe4ec"), C("#1a1f2b"), C("#d93636"), C("#d08700"))
+    W, H = A4
+    M = 15 * mm
+    CW = W - 2 * M
+    lb = info["labels"]
+    li, lo = lb["inside"], lb["outside"]
+
+    st = {
+        "h1": ParagraphStyle("h1", fontName=FB, fontSize=15, leading=19, textColor=TXT, spaceBefore=4, spaceAfter=6),
+        "h2": ParagraphStyle("h2", fontName=FB, fontSize=12, leading=15, textColor=TXT, spaceBefore=6, spaceAfter=4),
+        "p": ParagraphStyle("p", fontName=FR, fontSize=9, leading=12.5, textColor=TXT),
+        "mut": ParagraphStyle("mut", fontName=FR, fontSize=8, leading=11, textColor=GREY),
+        "cell": ParagraphStyle("cell", fontName=FR, fontSize=7.6, leading=9.5, textColor=TXT),
+        "cellb": ParagraphStyle("cellb", fontName=FB, fontSize=7.6, leading=9.5, textColor=TXT),
+        "th": ParagraphStyle("th", fontName=FB, fontSize=7.4, leading=9, textColor=colors.white),
+    }
+    f1 = lambda v, d=1: "–" if v is None else (f"{v:.{d}f}")
+    span_s = info["t1"] - info["t0"]
+    dfmt = "%d/%m/%Y %H:%M"
+    period = f"{datetime.fromtimestamp(info['t0']).strftime(dfmt)} — {datetime.fromtimestamp(info['t1']).strftime(dfmt)}"
+
+    # ── σελίδα: κεφαλίδα + υποσέλιδο με «Σελίδα Χ / Υ»
+    class NumCanvas(rl_canvas.Canvas):
+        def __init__(self, *a, **k):
+            super().__init__(*a, **k)
+            self._pages = []
+
+        def showPage(self):
+            self._pages.append(dict(self.__dict__))
+            self._startPage()
+
+        def save(self):
+            n = len(self._pages)
+            for p in self._pages:
+                self.__dict__.update(p)
+                self._decor(n)
+                super().showPage()
+            super().save()
+
+        def _logo(self, x, y, s):
+            self.setFillColor(BLUE)
+            self.roundRect(x, y, s, s, s * 0.22, stroke=0, fill=1)
+            self.setStrokeColor(colors.white)
+            self.setLineWidth(s * 0.075)
+            self.setLineCap(1)
+            for i, (w_, dy) in enumerate(((0.62, 0.68), (0.46, 0.50), (0.56, 0.32))):
+                p = self.beginPath()
+                p.moveTo(x + s * 0.2, y + s * dy)
+                p.curveTo(x + s * (0.2 + w_ * 0.4), y + s * (dy + 0.09), x + s * (0.2 + w_ * 0.7), y + s * (dy - 0.06),
+                          x + s * (0.2 + w_), y + s * dy)
+                self.drawPath(p, stroke=1, fill=0)
+
+        def _decor(self, n):
+            pg = self._pageNumber
+            if pg == 1:
+                self.setFillColor(NAVY)
+                self.rect(0, H - 40 * mm, W, 40 * mm, stroke=0, fill=1)
+                self.setFillColor(BLUE)
+                self.rect(0, H - 40 * mm, W, 1.4 * mm, stroke=0, fill=1)
+                self._logo(M, H - 29 * mm, 15 * mm)
+                self.setFillColor(colors.white)
+                self.setFont(FB, 24)
+                self.drawString(M + 19 * mm, H - 21.5 * mm, info["app"])
+                self.setFont(FR, 10.5)
+                self.setFillColor(C("#aeb9cf"))
+                self.drawString(M + 19 * mm, H - 28 * mm, "Αναφορά μετρήσεων θερμοκρασίας & υγρασίας")
+                self.setFont(FB, 10)
+                self.setFillColor(colors.white)
+                self.drawRightString(W - M, H - 18 * mm, period)
+                self.setFont(FR, 8.5)
+                self.setFillColor(C("#aeb9cf"))
+                if info.get("place"):
+                    self.drawRightString(W - M, H - 23.5 * mm, info["place"][:80])
+                self.drawRightString(W - M, H - 28.5 * mm,
+                                     "Δημιουργήθηκε " + datetime.now().strftime("%d/%m/%Y %H:%M"))
+            else:
+                self.setFillColor(NAVY)
+                self.rect(0, H - 12 * mm, W, 12 * mm, stroke=0, fill=1)
+                self._logo(M, H - 9.6 * mm, 7 * mm)
+                self.setFillColor(colors.white)
+                self.setFont(FB, 10)
+                self.drawString(M + 9.5 * mm, H - 7.4 * mm, info["app"])
+                self.setFont(FR, 8)
+                self.setFillColor(C("#aeb9cf"))
+                self.drawRightString(W - M, H - 7.4 * mm, period)
+            self.setStrokeColor(LINE)
+            self.setLineWidth(0.6)
+            self.line(M, 12 * mm, W - M, 12 * mm)
+            self.setFont(FR, 7.5)
+            self.setFillColor(GREY)
+            self.drawString(M, 8 * mm, f"{info['app']} v{info['version']} · {info['author']} · {info['team']}")
+            self.drawRightString(W - M, 8 * mm, f"Σελίδα {pg} / {n}")
+
+    buf = io.BytesIO()
+    doc = BaseDocTemplate(buf, pagesize=A4, leftMargin=M, rightMargin=M, topMargin=18 * mm, bottomMargin=16 * mm,
+                          title=f"{info['app']} — Αναφορά", author=info["author"], subject=period,
+                          creator=f"{info['app']} v{info['version']}")
+    first = Frame(M, 16 * mm, CW, H - 16 * mm - 46 * mm, id="first", leftPadding=0, rightPadding=0, topPadding=0)
+    later = Frame(M, 16 * mm, CW, H - 16 * mm - 18 * mm, id="later", leftPadding=0, rightPadding=0, topPadding=0)
+    doc.addPageTemplates([PageTemplate("first", [first], autoNextPageTemplate="later"),
+                          PageTemplate("later", [later])])
+
+    # ── δομικά στοιχεία
+    from reportlab.pdfbase.pdfmetrics import stringWidth as SW
+
+    def fit(text, font, size, maxw, min_size=6.0):
+        """Μικραίνει τη γραμματοσειρά ή κόβει με «…» ώστε το κείμενο να χωράει."""
+        while size > min_size and SW(text, font, size) > maxw:
+            size -= 0.3
+        while text and SW(text, font, size) > maxw:
+            text = text[:-2] + "…"
+        return text, size
+
+    def tile(title, big, unit, sub, accent, w):
+        d = Drawing(w, 23 * mm)
+        d.add(Rect(0, 0, w, 23 * mm, rx=3 * mm, ry=3 * mm, fillColor=LIGHT, strokeColor=None))
+        d.add(Rect(0, 0, 1.6 * mm, 23 * mm, fillColor=accent, strokeColor=None))
+        inner = w - 7 * mm
+        t_, ts_ = fit(title, FR, 7.8, inner)
+        d.add(String(4.5 * mm, 17 * mm, t_, fontName=FR, fontSize=ts_, fillColor=GREY))
+        d.add(String(4.5 * mm, 8.6 * mm, big, fontName=FB, fontSize=17, fillColor=accent))
+        d.add(String(4.5 * mm + SW(big, FB, 17) + 1.0 * mm, 8.8 * mm, unit, fontName=FR, fontSize=8.5, fillColor=GREY))
+        s_, ss_ = fit(sub, FR, 7, inner)
+        d.add(String(4.5 * mm, 3.2 * mm, s_, fontName=FR, fontSize=ss_, fillColor=GREY))
+        return d
+
+    def tiles_row(items):
+        gap = 3 * mm
+        w = (CW - gap * (len(items) - 1)) / len(items)
+        t = Table([[tile(*it, w) for it in items]], colWidths=[w + (gap if i < len(items) - 1 else 0)
+                                                                for i in range(len(items))])
+        t.setStyle(TableStyle([("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                               ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                               ("VALIGN", (0, 0), (-1, -1), "TOP")]))
+        return t
+
+    def chart(series, title, unit, height=62 * mm, band=None):
+        """series: [(pts[(ts,v)], color, dashed, name, fill)]  band: (lo, hi, color) ζώνη ορίων"""
+        w, h = CW, height
+        d = Drawing(w, h)
+        d.add(Rect(0, 0, w, h, rx=3 * mm, ry=3 * mm, fillColor=colors.white, strokeColor=LINE, strokeWidth=0.6))
+        pl, pr, pt, pb = 13 * mm, 5 * mm, 10 * mm, 9 * mm
+        x0, x1, y0, y1 = pl, w - pr, pb, h - pt
+        allv = [v for s in series for _, v in s[0]]
+        d.add(String(4 * mm, h - 6.3 * mm, title, fontName=FB, fontSize=9.5, fillColor=TXT))
+        lx = w - 4 * mm
+        for pts, col, dashed, name, _fill in reversed(series):
+            if not pts:
+                continue
+            tw = SW(name, FR, 7.4)
+            d.add(String(lx - tw, h - 6.1 * mm, name, fontName=FR, fontSize=7.4, fillColor=GREY))
+            ln = Line(lx - tw - 8 * mm, h - 5.2 * mm, lx - tw - 2 * mm, h - 5.2 * mm, strokeColor=col, strokeWidth=1.8)
+            if dashed:
+                ln.strokeDashArray = [2.2, 1.6]
+            d.add(ln)
+            lx -= tw + 12 * mm
+        if not allv:
+            d.add(String(w / 2, h / 2, "Δεν υπάρχουν δεδομένα", fontName=FR, fontSize=9, fillColor=GREY, textAnchor="middle"))
+            return d
+        lo_, hi_, step = _nice_range(min(allv), max(allv))
+        t0, t1 = info["t0"], info["t1"]
+        X = lambda t: x0 + (t - t0) / max(1, (t1 - t0)) * (x1 - x0)
+        Y = lambda v: y0 + (v - lo_) / max(1e-9, (hi_ - lo_)) * (y1 - y0)
+        if band:
+            b0, b1 = max(lo_, band[0]), min(hi_, band[1])
+            if b1 > b0:
+                d.add(Rect(x0, Y(b0), x1 - x0, Y(b1) - Y(b0), fillColor=band[2], strokeColor=None))
+        v = lo_
+        while v <= hi_ + step / 2:
+            yy = Y(v)
+            d.add(Line(x0, yy, x1, yy, strokeColor=LINE, strokeWidth=0.4))
+            d.add(String(x0 - 1.6 * mm, yy - 2.4, (f"{v:.0f}" if step >= 1 else f"{v:.1f}") + unit, fontName=FR,
+                         fontSize=6.8, fillColor=GREY, textAnchor="end"))
+            v += step
+        nt = 6
+        tf = "%H:%M" if span_s <= 36 * 3600 else ("%d/%m %H:%M" if span_s <= 4 * 86400 else "%d/%m")
+        for i in range(nt + 1):
+            tt = t0 + (t1 - t0) * i / nt
+            xx = X(tt)
+            d.add(Line(xx, y0, xx, y0 - 1.2 * mm, strokeColor=LINE, strokeWidth=0.5))
+            d.add(String(xx, y0 - 4.6 * mm, datetime.fromtimestamp(tt).strftime(tf), fontName=FR, fontSize=6.6,
+                         fillColor=GREY, textAnchor="middle"))
+        for pts, col, dashed, name, fill in series:
+            if len(pts) < 1:
+                continue
+            gaps = sorted(b[0] - a[0] for a, b in zip(pts, pts[1:]))
+            gap_lim = max(3 * (gaps[len(gaps) // 2] if gaps else 0), 2 * 3600 if dashed else 1800)
+            segs, cur = [], [pts[0]]
+            for a, b in zip(pts, pts[1:]):
+                if b[0] - a[0] > gap_lim:
+                    segs.append(cur)
+                    cur = []
+                cur.append(b)
+            segs.append(cur)
+            for sg in segs:
+                xy = []
+                for t, v in sg:
+                    xy += [X(t), Y(v)]
+                if fill and len(sg) > 1:
+                    d.add(Polygon([X(sg[0][0]), y0] + xy + [X(sg[-1][0]), y0],
+                                  fillColor=colors.Color(col.red, col.green, col.blue, alpha=0.10), strokeColor=None))
+                if len(sg) == 1:
+                    d.add(Circle(xy[0], xy[1], 1.1, fillColor=col, strokeColor=None))
+                    continue
+                pl_ = PolyLine(xy, strokeColor=col, strokeWidth=1.5 if not dashed else 1.2)
+                pl_.strokeLineJoin = 1
+                if dashed:
+                    pl_.strokeDashArray = [2.2, 1.6]
+                d.add(pl_)
+        return d
+
+    def table(head, rows, widths, zebra=True, aligns=None):
+        data = [[Paragraph(h, st["th"]) for h in head]] + [
+            [c if not isinstance(c, str) else Paragraph(c, st["cell"]) for c in r] for r in rows]
+        t = Table(data, colWidths=widths, repeatRows=1)
+        sty = [("BACKGROUND", (0, 0), (-1, 0), NAVY), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+               ("TOPPADDING", (0, 0), (-1, -1), 2.6), ("BOTTOMPADDING", (0, 0), (-1, -1), 2.6),
+               ("LEFTPADDING", (0, 0), (-1, -1), 3), ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+               ("LINEBELOW", (0, 1), (-1, -1), 0.3, LINE)]
+        if zebra:
+            for i in range(1, len(data)):
+                if i % 2 == 0:
+                    sty.append(("BACKGROUND", (0, i), (-1, i), LIGHT))
+        t.setStyle(TableStyle(sty))
+        return t
+
+    story = []
+    devs = info["devices"]
+    wx = info.get("weather") or []
+    wxf = info.get("wxf")
+    hum_lo, hum_hi = info.get("hum_band", (30.0, 60.0))
+
+    # ── 1. Σύνοψη
+    story.append(Paragraph("Σύνοψη", st["h1"]))
+    hours = span_s / 3600
+    intro = (f"Περίοδος <b>{period}</b> ({f1(hours, 0) + ' ώρες' if hours <= 72 else f1(hours / 24, 0) + ' ημέρες'}) · "
+             f"αισθητήρες: <b>{len(devs)}</b> · μετρήσεις: <b>{sum(len(d['rows']) for d in devs):,}</b>".replace(",", "."))
+    if info.get("place"):
+        intro += f" · καιρός ({lo}): <b>{info['place']}</b> (Open-Meteo)"
+    story.append(Paragraph(intro, st["p"]))
+    story.append(Spacer(1, 4 * mm))
+
+    for di, dv in enumerate(devs):
+        rows = dv["rows"]
+        T = [r[4] for r in rows]
+        Hh = [r[5] for r in rows]
+        DP = [r[6] for r in rows]
+        AH = [r[7] for r in rows]
+        tmn, tav, tmx = _stats(T)
+        hmn, hav, hmx = _stats(Hh)
+        dmn, dav, dmx = _stats(DP)
+        amn, aav, amx = _stats(AH)
+        head = (f"<font name='{FB}' size='11.5'>{dv['name']}</font>  "
+                f"<font color='#6b7588' size='8'>{dv['ip']} · {len(rows)} μετρήσεις · {li}</font>")
+        block = [Paragraph(head, st["p"]), Spacer(1, 2 * mm),
+                 tiles_row([("Θερμοκρασία (μέση)", f1(tav), "°C", f"min {f1(tmn)} · max {f1(tmx)} °C", ORANGE),
+                            ("Υγρασία (μέση)", f1(hav), "%", f"min {f1(hmn)} · max {f1(hmx)} %", SKY),
+                            ("Σημείο δρόσου", f1(dav), "°C", f"min {f1(dmn)} · max {f1(dmx)} °C", PURPLE),
+                            ("Απόλυτη υγρασία", f1(aav), "g/m³", f"min {f1(amn)} · max {f1(amx)}", GREEN)])]
+        # ποσοστά χρόνου σε ζώνες υγρασίας
+        hv = [x for x in Hh if x is not None]
+        if hv:
+            n = len(hv)
+            p_lo = 100 * sum(1 for x in hv if x < hum_lo) / n
+            p_hi = 100 * sum(1 for x in hv if x > hum_hi) / n
+            p_ok = 100 - p_lo - p_hi
+            p_mold = 100 * sum(1 for x in hv if x >= 70) / n
+            bar = Drawing(CW, 13 * mm)
+            bar.add(String(0, 9.6 * mm, f"Χρόνος ανά ζώνη υγρασίας ({li})", fontName=FB, fontSize=8, fillColor=TXT))
+            x = 0
+            for pc, col, lab in ((p_lo, AMBER, f"ξηρή <{hum_lo:.0f}%"), (p_ok, GREEN, f"άνετη {hum_lo:.0f}–{hum_hi:.0f}%"),
+                                 (p_hi, SKY, f"υγρή >{hum_hi:.0f}%")):
+                ww = CW * pc / 100
+                if ww > 0.2:
+                    bar.add(Rect(x, 3.6 * mm, ww, 4.2 * mm, fillColor=col, strokeColor=colors.white, strokeWidth=0.8))
+                    if ww > 26 * mm:
+                        bar.add(String(x + 2 * mm, 4.9 * mm, f"{lab}: {pc:.0f}%", fontName=FB, fontSize=6.8,
+                                       fillColor=colors.white))
+                x += ww
+            note = f"Κίνδυνος μούχλας (υγρασία ≥ 70%): {p_mold:.0f}% του χρόνου"
+            bar.add(String(0, 0, note, fontName=FR, fontSize=7, fillColor=RED if p_mold >= 10 else GREY))
+            block += [Spacer(1, 2.5 * mm), bar]
+        # μέσα–έξω
+        if wxf and rows:
+            dts, dhs, vent = [], [], {1: 0, -1: 0, 0: 0}
+            for r in rows[:: max(1, len(rows) // 3000)]:
+                w_ = wxf(r[0])
+                if not w_ or r[4] is None or r[5] is None or w_.get("temp") is None or w_.get("hum") is None:
+                    continue
+                df = inout_diff(r[4], r[5], w_["temp"], w_["hum"], lb)
+                dts.append(df["dt"])
+                dhs.append(df["dh"])
+                vent[df["vent"]] += 1
+            if dts:
+                n = sum(vent.values())
+                block += [Spacer(1, 2.5 * mm), tiles_row([
+                    (f"Θερμοκρασία {li} − {lo}", ("+" if sum(dts) > 0 else "") + f1(sum(dts) / len(dts)), "°C",
+                     f"εύρος {f1(min(dts))} … {f1(max(dts))} °C", ORANGE),
+                    (f"Υγρασία {li} − {lo}", ("+" if sum(dhs) > 0 else "") + f1(sum(dhs) / len(dhs)), "%",
+                     f"εύρος {f1(min(dhs))} … {f1(max(dhs))} %", SKY),
+                    ("Αερισμός ξεραίνει", f"{100 * vent[1] / n:.0f}", "%", f"του χρόνου ({lo}: πιο ξερός αέρας)", GREEN),
+                    ("Αερισμός υγραίνει", f"{100 * vent[-1] / n:.0f}", "%", f"του χρόνου ({lo}: πιο υγρός αέρας)", AMBER)])]
+        block.append(Spacer(1, 5 * mm))
+        story.append(KeepTogether(block))
+
+    # ── καιρός (έξω)
+    if wx:
+        wT = [r["temp"] for r in wx]
+        wH = [r["hum"] for r in wx]
+        rain = sum((r.get("rain") if r.get("rain") is not None else (r.get("precip") or 0)) or 0 for r in wx)
+        snow = sum(r.get("snow") or 0 for r in wx)
+        sun_h = sum(r.get("sunshine") or 0 for r in wx) / 3600
+        wmn, wav, wmx = _stats(wT)
+        _, whav, _ = _stats(wH)
+        stat = {}
+        for r in wx:
+            if r.get("status"):
+                stat[r["status"]] = stat.get(r["status"], 0) + 1
+        blk = [Paragraph(f"Καιρός — {lo}" + (f" <font color='#6b7588' size='8'>({info['place']}, Open-Meteo)</font>"
+                                               if info.get("place") else ""), st["h2"]),
+               tiles_row([("Θερμοκρασία (μέση)", f1(wav), "°C", f"min {f1(wmn)} · max {f1(wmx)} °C", ORANGE),
+                          ("Υγρασία (μέση)", f1(whav), "%", f"{len(wx)} ωριαίες τιμές", SKY),
+                          ("Βροχή / χιόνι", f1(rain), "mm", f"χιόνι {f1(snow)} cm", BLUE),
+                          ("Ηλιοφάνεια", f1(sun_h), "ώρες", "σύνολο διαστήματος", AMBER)])]
+        if stat:
+            tot = sum(stat.values())
+            pal = {"Ηλιοφάνεια": C("#f5b400"), "Συννεφιά": C("#8b96ab"), "Βροχή": C("#1f8fff"), "Χιόνι": C("#9fc0ff"),
+                   "Καταιγίδα": C("#7c3aed"), "Ομίχλη": C("#b8c0cc"), "Νύχτα": C("#33405c")}
+            bar = Drawing(CW, 12 * mm)
+            bar.add(String(0, 8.6 * mm, "Καταστάσεις καιρού (ώρες)", fontName=FB, fontSize=8, fillColor=TXT))
+            x = 0
+            leg = []
+            for k, v in sorted(stat.items(), key=lambda kv: -kv[1]):
+                ww = CW * v / tot
+                col = pal.get(k, GREY)
+                bar.add(Rect(x, 3 * mm, ww, 4 * mm, fillColor=col, strokeColor=colors.white, strokeWidth=0.8))
+                x += ww
+                leg.append((k, v, col))
+            lx = 0
+            for k, v, col in leg:
+                bar.add(Rect(lx, 0, 2.2 * mm, 2.2 * mm, fillColor=col, strokeColor=None))
+                txt = f"{k} {v}"
+                bar.add(String(lx + 3 * mm, 0.3 * mm, txt, fontName=FR, fontSize=6.8, fillColor=GREY))
+                lx += 3 * mm + SW(txt, FR, 6.8) + 4 * mm
+            blk += [Spacer(1, 2.5 * mm), bar]
+        story.append(KeepTogether(blk + [Spacer(1, 4 * mm)]))
+
+    # ── 2. Ανά αισθητήρα: γραφήματα + πίνακας ανά ημέρα (κάθε αισθητήρας σε νέα σελίδα)
+    out_t = _downsample([(r["ts"], r["temp"]) for r in wx], 240) if wx else []
+    out_h = _downsample([(r["ts"], r["hum"]) for r in wx], 240) if wx else []
+    WD = ["Δευ", "Τρί", "Τετ", "Πέμ", "Παρ", "Σάβ", "Κυρ"]
+    wdays = {}
+    for r in wx:
+        wdays.setdefault(datetime.fromtimestamp(r["ts"]).date(), []).append(r)
+    for dv in devs:
+        rows = dv["rows"]
+        story.append(PageBreak())
+        story.append(Paragraph(f"{dv['name']} <font color='#6b7588' size='9'>· {dv['ip']} · {li}</font>", st["h1"]))
+        pt_t = _downsample([(r[0], r[4]) for r in rows])
+        pt_h = _downsample([(r[0], r[5]) for r in rows])
+        pt_d = _downsample([(r[0], r[6]) for r in rows])
+        story.append(chart([(pt_t, ORANGE, False, f"{li}", True), (pt_d, PURPLE, False, "σημείο δρόσου", False),
+                            (out_t, GREEN, True, f"{lo} (Open-Meteo)", False)], "Θερμοκρασία", "°", height=56 * mm))
+        story.append(Spacer(1, 3.5 * mm))
+        story.append(chart([(pt_h, SKY, False, f"{li}", True), (out_h, GREEN, True, f"{lo} (Open-Meteo)", False)],
+                           f"Σχετική υγρασία  ·  πράσινη ζώνη = άνετη {hum_lo:.0f}–{hum_hi:.0f}%", "%", height=56 * mm,
+                           band=(hum_lo, hum_hi, C("#1e9e55", 0.08))))
+        story.append(Spacer(1, 5 * mm))
+        days = {}
+        for r in rows:
+            days.setdefault(datetime.fromtimestamp(r[0]).date(), []).append(r)
+        trs = []
+        for k in sorted(days):
+            rr = days[k]
+            tmn, tav, tmx = _stats([r[4] for r in rr])
+            hmn, hav, hmx = _stats([r[5] for r in rr])
+            _, dav, _ = _stats([r[6] for r in rr])
+            ww = wdays.get(k, [])
+            _, wta, _ = _stats([r["temp"] for r in ww])
+            _, wha, _ = _stats([r["hum"] for r in ww])
+            rn = sum((r.get("rain") if r.get("rain") is not None else (r.get("precip") or 0)) or 0 for r in ww) if ww else None
+            sc = {}
+            for r in ww:
+                if r.get("status") and r["status"] != "Νύχτα":
+                    sc[r["status"]] = sc.get(r["status"], 0) + 1
+            dom = max(sc.items(), key=lambda kv: kv[1])[0] if sc else ("Νύχτα" if ww else "")
+            hcol = "#d93636" if (hmx or 0) >= 70 else ("#d08700" if (hmn if hmn is not None else 100) < hum_lo else "#1a1f2b")
+            trs.append([f"<b>{WD[k.weekday()]} {k.strftime('%d/%m')}</b>",
+                        f"{f1(tmn)} / <b>{f1(tav)}</b> / {f1(tmx)}",
+                        f"<font color='{hcol}'>{f1(hmn, 0)} / <b>{f1(hav, 0)}</b> / {f1(hmx, 0)}</font>",
+                        f1(dav), f1(wta), f1(wha, 0), "" if rn is None else f1(rn), dom, str(len(rr))])
+        story.append(Paragraph("Ανά ημέρα", st["h2"]))
+        story.append(table(["Ημέρα", f"{li} °C<br/>min / μέση / max", f"{li} %RH<br/>min / μέση / max", "Δρόσος °C",
+                            f"{lo} °C", f"{lo} %", "Βροχή mm", "Καιρός", "Μετρ."],
+                           trs, [18 * mm, 31 * mm, 28 * mm, 15 * mm, 14 * mm, 13 * mm, 15 * mm, 26 * mm, 20 * mm]))
+        story.append(Paragraph("<font color='#d93636'>κόκκινο</font> = υγρασία έφτασε ≥ 70% (κίνδυνος μούχλας) · "
+                               f"<font color='#d08700'>πορτοκαλί</font> = έπεσε κάτω από {hum_lo:.0f}%", st["mut"]))
+        story.append(Spacer(1, 5 * mm))
+
+    story.append(Paragraph(
+        f"Σημειώσεις: η απόλυτη υγρασία (g/m³) δείχνει πόσο νερό έχει πραγματικά ο αέρας — αν «{lo}» είναι μικρότερη από "
+        f"«{li}», ο αερισμός ξεραίνει τον χώρο, ακόμα κι αν το ποσοστό (%RH) έξω φαίνεται μεγαλύτερο. "
+        "Καιρός: Open-Meteo.com (CC BY 4.0). Αισθητήρες: BleBox humiditySensor.", st["mut"]))
+    doc.build(story, canvasmaker=NumCanvas)
+    return buf.getvalue()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # 8) Email
 # ═══════════════════════════════════════════════════════════════════════════
 def send_mail(e, subject, body, attachments=()):
@@ -1568,7 +2096,36 @@ class Engine:
                 out["next_hours"] = [x for x in wx["hourly"] if now - 3600 <= x["ts"] <= now + 24 * 3600]
         return out
 
+    def pdf_bytes(self, dids, t0, t1):
+        """Όμορφη αναφορά PDF για τις συσκευές dids (None = όλες) στο διάστημα t0..t1."""
+        known = {d["id"]: d for d in self.devices()}
+        by = {}
+        for r in self.store.rows(list(dids) if dids else None, t0, t1):
+            by.setdefault(r[1], []).append(r)
+        order = [i for i in known if i in by] + sorted(i for i in by if i not in known)   # και αισθητήρες που αφαιρέθηκαν
+        devs = []
+        for i in order:
+            rows = by[i]
+            d = known.get(i, {})
+            devs.append({"id": i, "name": d.get("name") or rows[-1][2] or i, "ip": d.get("ip") or rows[-1][3] or "",
+                         "rows": rows})
+        if not devs:
+            raise RuntimeError("Δεν υπάρχουν μετρήσεις στο διάστημα")
+        wx = [dict(zip(WX_KEYS, r)) for r in self.store.weather_rows(t0, t1)]
+        al = self.cfg.get("alarms") or {}
+        lo_, hi_ = float(al.get("hum_min", 30) or 30), float(al.get("hum_max", 60) or 60)
+        if not al.get("enabled") or hi_ - lo_ < 5:
+            lo_, hi_ = 30.0, 60.0
+        info = {"app": APP_NAME, "version": APP_VERSION, "author": AUTHOR, "team": TEAM, "t0": t0, "t1": t1,
+                "devices": devs, "weather": wx, "wxf": self.wx_lookup(t0, t1) if wx else None,
+                "place": (self.cfg.get("weather") or {}).get("place", "") if wx else "",
+                "labels": labels(self.cfg), "hum_band": (lo_, hi_)}
+        return build_pdf_report(info)
+
     def export_bytes(self, kind, rows, t0, t1):
+        if kind == "pdf":
+            ids = sorted({r[1] for r in rows})
+            return self.pdf_bytes(ids or None, t0, t1)
         wxf = self.wx_lookup(t0, t1)
         if kind == "csv":
             return csv_bytes(rows, self.cfg["export"].get("greek_excel", True), wxf)
@@ -1786,8 +2343,14 @@ class Engine:
             body, t0, t1 = self.report_text(hours)
             rows = self.store.rows(None, t0, t1)
             stamp = datetime.now().strftime("%Y%m%d_%H%M")
-            att = [(f"AirSense_{stamp}.csv", self.export_bytes("csv", rows, t0, t1), "text", "csv"),
-                   (f"AirSense_{stamp}.xml", self.export_bytes("xml", rows, t0, t1), "application", "xml")]
+            att = []
+            if self.cfg["email"].get("attach_pdf", True) and rows:
+                try:
+                    att.append((f"AirSense_{stamp}.pdf", self.pdf_bytes(None, t0, t1), "application", "pdf"))
+                except Exception as e:
+                    self.log(f"PDF αναφορά δεν δημιουργήθηκε: {e}", "warn")
+            att += [(f"AirSense_{stamp}.csv", self.export_bytes("csv", rows, t0, t1), "text", "csv"),
+                    (f"AirSense_{stamp}.xml", self.export_bytes("xml", rows, t0, t1), "application", "xml")]
             send_mail(self.cfg["email"], f"[{APP_NAME}] Αναφορά {datetime.now().strftime('%d/%m/%Y')}", body, att)
             self.log("Στάλθηκε email αναφοράς")
             return True, "Η αναφορά στάλθηκε"
@@ -2103,6 +2666,7 @@ button.pri{background:#2b6cff!important;color:#fff}.badge{background:#e6eaf2}.wa
  <button onclick="act('scan')">📡 Σάρωση δικτύου</button>
  <button onclick="dl('csv')">⬇ CSV</button>
  <button onclick="dl('xml')">⬇ XML</button>
+ <button class="pri" onclick="dl('pdf')">📄 PDF αναφορά</button>
  <button onclick="act('report')">✉ Email αναφορά</button>
 </div>
 <h2>Διαχείριση</h2>
@@ -2352,13 +2916,18 @@ def make_handler(engine):
                     hours = min(24 * 366, max(0.1, float(qs.get("hours", ["24"])[0])))
                     return self._send(200, {"id": did, "hours": hours, "points": engine.history_points(did, hours),
                                             "wx": engine.weather_points(hours)})
-                if p in ("/api/export.csv", "/api/export.xml"):
+                if p in ("/api/export.csv", "/api/export.xml", "/api/export.pdf"):
                     hours = min(24 * 3660, max(0.1, float(qs.get("hours", ["24"])[0])))
                     did = qs.get("id", ["all"])[0]
                     t1 = time.time()
                     t0 = t1 - hours * 3600
                     rows = engine.store.rows(None if did == "all" else [did], t0, t1)
                     stamp = datetime.now().strftime("%Y%m%d_%H%M")
+                    if p.endswith("pdf"):
+                        if not rows:
+                            return self._send(404, {"error": "Δεν υπάρχουν μετρήσεις στο διάστημα"})
+                        data, ct, fn = engine.export_bytes("pdf", rows, t0, t1), "application/pdf", f"AirSense_{stamp}.pdf"
+                        return self._send(200, data, ct, {"Content-Disposition": f'inline; filename="{fn}"'})
                     if p.endswith("csv"):
                         data, ct, fn = engine.export_bytes("csv", rows, t0, t1), "text/csv; charset=utf-8", f"AirSense_{stamp}.csv"
                     else:
@@ -5218,13 +5787,16 @@ if not HEADLESS:
             lay.addWidget(g, 1, Qt.AlignmentFlag.AlignTop)
 
             right = QVBoxLayout()
-            g2 = QGroupBox("Ημερήσια αναφορά (με συνημμένα CSV + XML)")
+            g2 = QGroupBox("Ημερήσια αναφορά (συνημμένα PDF + CSV + XML)")
             f2 = QFormLayout(g2)
             self.em_daily = QCheckBox("Αποστολή κάθε μέρα")
             self.em_daily.setChecked(e.get("daily_report", True))
             self.em_time = QTimeEdit(QTime.fromString(e.get("report_time", "08:00"), "HH:mm"))
             self.em_time.setDisplayFormat("HH:mm")
+            self.em_pdf = QCheckBox("📄 Συνημμένη όμορφη αναφορά PDF")
+            self.em_pdf.setChecked(e.get("attach_pdf", True))
             f2.addRow(self.em_daily)
+            f2.addRow(self.em_pdf)
             f2.addRow("Ώρα αποστολής:", self.em_time)
             right.addWidget(g2)
             g3 = QGroupBox("Ειδοποιήσεις ορίων")
@@ -5287,6 +5859,7 @@ if not HEADLESS:
                      security=self.em_sec.currentText(), user=self.em_user.text().strip(),
                      password=enc_secret(self.em_pwd.text()), sender=self.em_from.text().strip(),
                      to=self.em_to.text().strip(), daily_report=self.em_daily.isChecked(),
+                     attach_pdf=self.em_pdf.isChecked(),
                      report_time=self.em_time.time().toString("HH:mm"), alarm_mails=self.al_mail.isChecked())
             a.update(enabled=self.al_en.isChecked(), temp_min=self.al_tmin.value(), temp_max=self.al_tmax.value(),
                      hum_min=self.al_hmin.value(), hum_max=self.al_hmax.value(), offline=self.al_off.isChecked(),
@@ -5334,8 +5907,11 @@ if not HEADLESS:
             q.addStretch()
             f.addLayout(q, 2, 0, 1, 4)
             r = QHBoxLayout()
-            r.addWidget(_btn("💾 Εξαγωγή CSV…", lambda: self._export("csv"), True))
-            r.addWidget(_btn("💾 Εξαγωγή XML…", lambda: self._export("xml"), True))
+            bp = _btn("📄 PDF αναφορά…", lambda: self._export("pdf"), True)
+            bp.setToolTip("Όμορφη αναφορά με σύνοψη, γραφήματα, καιρό, μέσα–έξω και πίνακα ανά ημέρα")
+            r.addWidget(bp)
+            r.addWidget(_btn("💾 Εξαγωγή CSV…", lambda: self._export("csv")))
+            r.addWidget(_btn("💾 Εξαγωγή XML…", lambda: self._export("xml")))
             r.addWidget(_btn("📂 Άνοιγμα φακέλου δεδομένων", lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(DATA_DIR))))
             r.addStretch()
             f.addLayout(r, 3, 0, 1, 4)
@@ -5394,10 +5970,20 @@ if not HEADLESS:
             path, _ = QFileDialog.getSaveFileName(self, "Αποθήκευση", fn, f"{kind.upper()} (*.{kind})")
             if not path:
                 return
-            data = self.engine.export_bytes(kind, rows, t0, t1)
+            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+            try:
+                data = self.engine.export_bytes(kind, rows, t0, t1)
+            except Exception as e:
+                QApplication.restoreOverrideCursor()
+                self.engine.log(f"Εξαγωγή {kind.upper()} απέτυχε: {e}", "err")
+                return QMessageBox.warning(self, APP_NAME, f"Η εξαγωγή απέτυχε:\n{e}")
+            QApplication.restoreOverrideCursor()
             with open(path, "wb") as f:
                 f.write(data)
             self.engine.log(f"Εξαγωγή {len(rows)} μετρήσεων → {path}")
+            if kind == "pdf":
+                QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+                return
             if QMessageBox.question(self, APP_NAME, f"Αποθηκεύτηκαν {len(rows)} μετρήσεις.\n\nΆνοιγμα αρχείου;") \
                     == QMessageBox.StandardButton.Yes:
                 QDesktopServices.openUrl(QUrl.fromLocalFile(path))

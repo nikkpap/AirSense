@@ -1,7 +1,7 @@
 # 🌬 AirSense
 
 Παρακολούθηση, καταγραφή και ειδοποιήσεις για αισθητήρες **BleBox humiditySensor**: γραφήματα, καιρός Open-Meteo,
-διαφορά μέσα–έξω με συμβουλή αερισμού, CSV/XML, email, και πρόσβαση από το κινητό (τοπικά ή από παντού με Tailscale).
+διαφορά μέσα–έξω με συμβουλή αερισμού, **αναφορές PDF**, CSV/XML, email, και πρόσβαση από το κινητό (τοπικά ή από παντού με Tailscale).
 *(πρώην ALU HygroLink)*
 
 **Developer:** Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM

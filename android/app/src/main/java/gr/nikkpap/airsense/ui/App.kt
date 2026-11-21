@@ -352,6 +352,7 @@ fun HomeScreen(vm: MainViewModel, ui: UiState) {
                     Button(onClick = { vm.post("/api/poll") }) { Icon(Icons.Filled.Refresh, null); Spacer(Modifier.width(6.dp)); Text(tr("Μέτρηση τώρα", "Measure now")) }
                     OutlinedButton(onClick = { openUrl(ctx, vm.exportUrl("csv")) }) { Icon(Icons.Filled.Download, null); Spacer(Modifier.width(6.dp)); Text("CSV") }
                     OutlinedButton(onClick = { openUrl(ctx, vm.exportUrl("xml")) }) { Icon(Icons.Filled.Download, null); Spacer(Modifier.width(6.dp)); Text("XML") }
+                    Button(onClick = { openUrl(ctx, vm.exportUrl("pdf")) }) { Icon(Icons.Filled.Download, null); Spacer(Modifier.width(6.dp)); Text("PDF") }
                 }
             }
         }

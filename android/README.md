@@ -1,4 +1,4 @@
-# 🌬 AirSense (Android) v1.2.0
+# 🌬 AirSense (Android) v1.2.1
 
 Εφαρμογή Android για το **AirSense** (BleBox humiditySensor).
 Developer: **Nikolaos K. Paridis (aka nikkpap)** · ALU DEV TEAM
@@ -28,6 +28,9 @@ Developer: **Nikolaos K. Paridis (aka nikkpap)** · ALU DEV TEAM
 Εκδόσεις: AGP 8.11.1 · Kotlin 2.2.0 · Gradle 8.14.3 · compileSdk 36 · Compose BOM 2025.06.00
 
 ## Αλλαγές
+### v1.2.1
+- Κουμπί **PDF** — ανοίγει την όμορφη αναφορά PDF του server (v1.6.1+).
+
 ### v1.2.0
 - Νέο όνομα: **AirSense** (πρώην HygroLink) · πακέτο `gr.nikkpap.airsense`.
   Είναι νέα εφαρμογή για το Android — αν είχες το HygroLink, απεγκατάστησέ το και βάλε τη διεύθυνση/QR ξανά.

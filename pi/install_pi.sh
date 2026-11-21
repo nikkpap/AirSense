@@ -63,7 +63,7 @@ fi
 # ── 1. Πακέτα ──
 say "1/6  Πακέτα συστήματος (python3, curl, qrencode)…"
 apt-get update -qq || warn "apt update απέτυχε — συνεχίζω"
-DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3 curl ca-certificates qrencode >/dev/null \
+DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3 python3-reportlab fonts-dejavu-core curl ca-certificates qrencode >/dev/null \
   || warn "Κάποια πακέτα δεν εγκαταστάθηκαν — συνεχίζω"
 python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)' || die "Χρειάζεται Python 3.9 ή νεότερη"
 ok "Python $(python3 -c 'import platform; print(platform.python_version())')"
