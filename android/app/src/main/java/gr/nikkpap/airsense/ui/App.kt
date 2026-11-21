@@ -255,11 +255,11 @@ fun SetupScreen(vm: MainViewModel) {
             Spacer(Modifier.height(6.dp))
             Text(
                 tr(
-                    "1. Στον υπολογιστή άνοιξε το ALU AirSense → καρτέλα «📱 Κινητό».\n" +
+                    "1. Στον υπολογιστή άνοιξε το AirSense → καρτέλα «📱 Κινητό».\n" +
                             "2. Πάτα «Σκανάρισμα QR» εδώ και σκάναρε το QR από την οθόνη.\n" +
                             "3. Για πρόσβαση από παντού: Tailscale σε υπολογιστή + κινητό (ίδιος λογαριασμός) και σκάναρε και το QR «Tailscale».\n" +
                             "4. Πάτα «Δοκιμή & αποθήκευση».",
-                    "1. On the PC open ALU AirSense → tab “📱 Mobile”.\n" +
+                    "1. On the PC open AirSense → tab “📱 Mobile”.\n" +
                             "2. Tap “Scan QR” here and scan the QR on the screen.\n" +
                             "3. For access from anywhere: Tailscale on PC + phone (same account), scan the “Tailscale” QR too.\n" +
                             "4. Tap “Test & save”."
@@ -290,8 +290,8 @@ fun HomeScreen(vm: MainViewModel, ui: UiState) {
                     Text(tr("⚠ Ο υπολογιστής δεν απαντά", "⚠ PC not reachable"), color = BadC, fontWeight = FontWeight.Bold)
                     Text(ui.error ?: "", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
                     Text(
-                        tr("Είναι ανοιχτός ο υπολογιστής και το ALU AirSense; Είσαι στο ίδιο WiFi ή με Tailscale;",
-                            "Is the PC and ALU AirSense running? Same WiFi or Tailscale on?"), fontSize = 13.sp
+                        tr("Είναι ανοιχτός ο υπολογιστής και το AirSense; Είσαι στο ίδιο WiFi ή με Tailscale;",
+                            "Is the PC and AirSense running? Same WiFi or Tailscale on?"), fontSize = 13.sp
                     )
                 }
             }

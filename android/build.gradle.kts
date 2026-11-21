@@ -1,4 +1,4 @@
-// ALU AirSense (Android) — Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM
+// AirSense (Android) — Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM
 plugins {
     id("com.android.application") version "8.11.1" apply false
     id("org.jetbrains.kotlin.android") version "2.2.0" apply false

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════════════════
-#  ALU AirSense — εγκατάσταση σε Raspberry Pi (Zero 2 W / 3 / 4 / 5)
+#  AirSense — εγκατάσταση σε Raspberry Pi (Zero 2 W / 3 / 4 / 5)
 #  Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM
 #  Χρήση:  bash install_pi.sh
 # ═══════════════════════════════════════════════════════════════════════
@@ -25,23 +25,23 @@ HOME_DIR="$(getent passwd "$RUN_USER" | cut -d: -f6)"
 SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR=/opt/airsense
 DATA_DIR="$HOME_DIR/airsense-data"
-SRC="$(ls "$SRC_DIR"/ALU_AirSense_v*.pyw 2>/dev/null | sort -V | tail -1 || true)"
-[ -n "$SRC" ] || die "Δεν βρέθηκε ALU_AirSense_v*.pyw δίπλα στο install_pi.sh"
-VER="$(basename "$SRC" | sed -E 's/^ALU_AirSense_v(.*)\.pyw$/\1/')"
+SRC="$(ls "$SRC_DIR"/AirSense_v*.pyw 2>/dev/null | sort -V | tail -1 || true)"
+[ -n "$SRC" ] || die "Δεν βρέθηκε AirSense_v*.pyw δίπλα στο install_pi.sh"
+VER="$(basename "$SRC" | sed -E 's/^AirSense_v(.*)\.pyw$/\1/')"
 
 echo -e "${B}"
 echo "  ╔══════════════════════════════════════════════╗"
-echo "  ║   🌬 ALU AirSense v$VER — Raspberry Pi        "
+echo "  ║   🌬 AirSense v$VER — Raspberry Pi        "
 echo "  ║   Nikolaos K. Paridis (aka nikkpap)           "
 echo "  ╚══════════════════════════════════════════════╝"
 echo -e "${N}  Χρήστης: $RUN_USER · Δεδομένα: $DATA_DIR"
 
-run_app() { sudo -u "$RUN_USER" python3 "$APP_DIR/ALU_AirSense.pyw" --data "$DATA_DIR" "$@"; }
+run_app() { sudo -u "$RUN_USER" python3 "$APP_DIR/AirSense.pyw" --data "$DATA_DIR" "$@"; }
 
-# ── Μεταφορά από το παλιό όνομα (ALU HygroLink → ALU AirSense) ──
+# ── Μεταφορά από το παλιό όνομα (ALU HygroLink → AirSense) ──
 MIGRATED=0
 if [ -f /etc/systemd/system/hygrolink.service ]; then
-  echo -e "${G}Βρέθηκε το παλιό ALU HygroLink — μεταφέρεται στο νέο όνομα ALU AirSense (κρατάω όλα τα δεδομένα).${N}"
+  echo -e "${G}Βρέθηκε το παλιό ALU HygroLink — μεταφέρεται στο νέο όνομα AirSense (κρατάω όλα τα δεδομένα).${N}"
   systemctl disable --now hygrolink hygrolink-bootwifi >/dev/null 2>&1 || true
   rm -f /etc/systemd/system/hygrolink.service /etc/systemd/system/hygrolink-bootwifi.service
   systemctl daemon-reload
@@ -72,7 +72,7 @@ ok "Python $(python3 -c 'import platform; print(platform.python_version())')"
 say "2/6  Αντιγραφή εφαρμογής στο $APP_DIR…"
 systemctl stop airsense 2>/dev/null || true
 install -d -m 755 "$APP_DIR"
-install -m 644 "$SRC" "$APP_DIR/ALU_AirSense.pyw"
+install -m 644 "$SRC" "$APP_DIR/AirSense.pyw"
 if [ -f "$SRC_DIR/airsense_wifi.py" ]; then
   sed 's/\r$//' "$SRC_DIR/airsense_wifi.py" > /usr/local/bin/airsense-wifi && chmod 755 /usr/local/bin/airsense-wifi
   ok "Εργαλείο WiFi: airsense wifi"
@@ -83,8 +83,8 @@ echo "$VER" > "$APP_DIR/VERSION"
 install -d -o "$RUN_USER" -g "$(id -gn "$RUN_USER")" -m 750 "$DATA_DIR"
 cat > /usr/local/bin/airsense <<EOF
 #!/usr/bin/env bash
-# ALU AirSense — εντολή διαχείρισης (Raspberry Pi)
-APP=$APP_DIR/ALU_AirSense.pyw
+# AirSense — εντολή διαχείρισης (Raspberry Pi)
+APP=$APP_DIR/AirSense.pyw
 DATA=$DATA_DIR
 U=$RUN_USER
 SVC=airsense
@@ -103,9 +103,9 @@ case "${1:-help}" in
   add)       [ -n "${2:-}" ] || { echo "Χρήση: airsense add 192.168.1.50"; exit 1; }; cfg --add "$2" ;;
   city)      cfg --locate "${2:-}" ;;
   update)
-    NEW="${2:-$(ls ~/ALU_AirSense_v*.pyw 2>/dev/null | sort -V | tail -1)}"
-    [ -f "$NEW" ] || { echo "Βάλε το νέο ALU_AirSense_vX.pyw στο ~ ή: airsense update /path/file.pyw"; exit 1; }
-    sudo install -m 644 "$NEW" "$APP" && basename "$NEW" | sed -E 's/^ALU_AirSense_v(.*)\.pyw$/\1/' | sudo tee "$(dirname "$APP")/VERSION" >/dev/null
+    NEW="${2:-$(ls ~/AirSense_v*.pyw 2>/dev/null | sort -V | tail -1)}"
+    [ -f "$NEW" ] || { echo "Βάλε το νέο AirSense_vX.pyw στο ~ ή: airsense update /path/file.pyw"; exit 1; }
+    sudo install -m 644 "$NEW" "$APP" && basename "$NEW" | sed -E 's/^AirSense_v(.*)\.pyw$/\1/' | sudo tee "$(dirname "$APP")/VERSION" >/dev/null
     sudo systemctl restart "$SVC" && echo "✔ Ενημερώθηκε σε $(cat "$(dirname "$APP")/VERSION")" ;;
   backup)
     F=~/airsense-backup-$(date +%Y%m%d_%H%M).tar.gz
@@ -132,7 +132,7 @@ case "${1:-help}" in
   airsense set-pin 1234  PIN για web/κινητό  (χωρίς αριθμό = αφαίρεση)
   airsense add IP        προσθήκη αισθητήρα με IP
   airsense city "Πόλη"   τοποθεσία καιρού (Open-Meteo)
-  airsense update [αρχ.] νέα έκδοση (ALU_AirSense_vX.pyw στο ~)
+  airsense update [αρχ.] νέα έκδοση (AirSense_vX.pyw στο ~)
   airsense backup        αντίγραφο ασφαλείας δεδομένων
   airsense wifi          WiFi του Pi: σάρωση, νέο δίκτυο, αποθηκευμένα (μενού)
   airsense tailscale     εγκατάσταση/σύνδεση Tailscale
@@ -169,7 +169,7 @@ fi
 say "4/6  Υπηρεσία systemd (ξεκινά μόνη της σε κάθε εκκίνηση)…"
 cat > /etc/systemd/system/airsense.service <<EOF
 [Unit]
-Description=ALU AirSense server (BleBox humiditySensor) — nikkpap
+Description=AirSense server (BleBox humiditySensor) — nikkpap
 After=network-online.target
 Wants=network-online.target
 
@@ -177,7 +177,7 @@ Wants=network-online.target
 Type=simple
 User=$RUN_USER
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/usr/bin/python3 $APP_DIR/ALU_AirSense.pyw --headless --data $DATA_DIR
+ExecStart=/usr/bin/python3 $APP_DIR/AirSense.pyw --headless --data $DATA_DIR
 Restart=always
 RestartSec=10
 Nice=5

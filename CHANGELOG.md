@@ -1,8 +1,8 @@
-# Αλλαγές — ALU AirSense
+# Αλλαγές — AirSense
 
 ## v1.6.0
-- **Νέο όνομα: ALU AirSense** (πρώην ALU HygroLink). Η μετάβαση γίνεται αυτόματα:
-  - Windows: ο φάκελος `Έγγραφα\ALU HygroLink` γίνεται `Έγγραφα\ALU AirSense` (ιστορικό, ρυθμίσεις, κωδικοί), η αυτόματη εκκίνηση μεταφέρεται, και αν τρέχει το παλιό κλείνει μόνο του.
+- **Νέο όνομα: AirSense** (πρώην ALU HygroLink). Η μετάβαση γίνεται αυτόματα:
+  - Windows: ο φάκελος `Έγγραφα\ALU HygroLink` γίνεται `Έγγραφα\AirSense` (ιστορικό, ρυθμίσεις, κωδικοί), η αυτόματη εκκίνηση μεταφέρεται, και αν τρέχει το παλιό κλείνει μόνο του.
   - Raspberry Pi: ο νέος installer μεταφέρει `~/hygrolink-data` → `~/airsense-data` και την υπηρεσία. Η εντολή `hygrolink` δουλεύει ακόμα (= `airsense`), και το Pi διαβάζει και το παλιό `hygrolink-wifi.txt`.
   - Android: νέα εφαρμογή **AirSense** v1.2.0 (`gr.nikkpap.airsense`).
 - Build & Release αυτόματα στο GitHub (Actions).

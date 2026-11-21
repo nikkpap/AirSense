@@ -1,17 +1,17 @@
 @echo off
 chcp 65001 >nul
-title ALU AirSense - Εγκατάσταση σε Raspberry Pi
+title AirSense - Εγκατάσταση σε Raspberry Pi
 echo.
 echo   ==============================================
-echo     ALU AirSense - Εγκατάσταση σε Raspberry Pi
+echo     AirSense - Εγκατάσταση σε Raspberry Pi
 echo     Nikolaos K. Paridis (aka nikkpap)
 echo   ==============================================
 echo.
 set "HERE=%~dp0"
 set "PYW="
-for %%F in ("%HERE%ALU_AirSense_v*.pyw") do set "PYW=%%~fF"
+for %%F in ("%HERE%AirSense_v*.pyw") do set "PYW=%%~fF"
 if "%PYW%"=="" (
-  echo [X] Δεν βρέθηκε ALU_AirSense_v*.pyw σε αυτόν τον φάκελο.
+  echo [X] Δεν βρέθηκε AirSense_v*.pyw σε αυτόν τον φάκελο.
   pause & exit /b 1
 )
 where ssh >nul 2>nul || (
@@ -30,7 +30,7 @@ scp -o StrictHostKeyChecking=accept-new "%HERE%install_pi.sh" "%HERE%airsense_wi
 if errorlevel 1 goto err
 echo.
 echo [2/2] Εγκατάσταση (ξανά ο κωδικός του Pi, μετά απάντα στις ερωτήσεις)...
-ssh -t -o StrictHostKeyChecking=accept-new %PIUSER%@%PIHOST% "mkdir -p ~/AirSense-Pi && mv -f ~/install_pi.sh ~/airsense_wifi.py ~/AirSense-Pi/ && cp -f ~/ALU_AirSense_v*.pyw ~/AirSense-Pi/ && sed -i 's/\r$//' ~/AirSense-Pi/install_pi.sh && bash ~/AirSense-Pi/install_pi.sh"
+ssh -t -o StrictHostKeyChecking=accept-new %PIUSER%@%PIHOST% "mkdir -p ~/AirSense-Pi && mv -f ~/install_pi.sh ~/airsense_wifi.py ~/AirSense-Pi/ && cp -f ~/AirSense_v*.pyw ~/AirSense-Pi/ && sed -i 's/\r$//' ~/AirSense-Pi/install_pi.sh && bash ~/AirSense-Pi/install_pi.sh"
 if errorlevel 1 goto err
 echo.
 echo [OK] Τέλος! Σκάναρε το QR που εμφανίστηκε με το κινητό.

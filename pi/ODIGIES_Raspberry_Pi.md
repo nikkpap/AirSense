@@ -1,6 +1,6 @@
-# 🌬 ALU AirSense σε Raspberry Pi — Οδηγίες βήμα-βήμα
+# 🌬 AirSense σε Raspberry Pi — Οδηγίες βήμα-βήμα
 
-> **Νέο όνομα:** το ALU HygroLink λέγεται πλέον **ALU AirSense**. Αν έχεις ήδη το παλιό στο Pi, απλά τρέξε τον νέο
+> **Νέο όνομα:** το ALU HygroLink λέγεται πλέον **AirSense**. Αν έχεις ήδη το παλιό στο Pi, απλά τρέξε τον νέο
 > installer: μεταφέρει μόνος του δεδομένα (`~/hygrolink-data` → `~/airsense-data`), κωδικούς, PIN, πόλη και αισθητήρες.
 > Η παλιά εντολή `hygrolink` συνεχίζει να δουλεύει (= `airsense`), και το Pi διαβάζει και το παλιό `hygrolink-wifi.txt`.
 > Το όνομα του Pi στο δίκτυο **δεν αλλάζει** — αν το είχες `hygrolink`, συνεχίζεις με `ssh pi@hygrolink.local`.
@@ -53,7 +53,7 @@
 
 ### Εναλλακτικά — χειροκίνητα (PowerShell)
 ```powershell
-scp install_pi.sh airsense_wifi.py ALU_AirSense_v1.6.0.pyw pi@airsense.local:~/
+scp install_pi.sh airsense_wifi.py AirSense_v1.6.0.pyw pi@airsense.local:~/
 ssh pi@airsense.local
 bash install_pi.sh
 ```
@@ -62,7 +62,7 @@ bash install_pi.sh
 
 ## 4. Ο αισθητήρας
 - Ο αισθητήρας πρέπει να είναι στο **ίδιο WiFi** με το Pi. Το Pi τον βρίσκει **αυτόματα** μέσα σε 1–2 λεπτά.
-- **Καινούριος αισθητήρας:** σύνδεσέ τον πρώτα στο WiFi από το **ALU AirSense στα Windows** (🧙 Οδηγός) ή από την εφαρμογή wBox της BleBox.
+- **Καινούριος αισθητήρας:** σύνδεσέ τον πρώτα στο WiFi από το **AirSense στα Windows** (🧙 Οδηγός) ή από την εφαρμογή wBox της BleBox.
 - Αν δεν βρεθεί: στο Pi γράψε `airsense add 192.168.1.50` (η IP του αισθητήρα).
 
 ---
@@ -97,7 +97,7 @@ bash install_pi.sh
 | `airsense set-pin 1234` | PIN (χωρίς αριθμό = αφαίρεση) |
 | `airsense add 192.168.1.50` | προσθήκη αισθητήρα |
 | `airsense city "Αμύνταιο"` | τοποθεσία καιρού |
-| `airsense update` | νέα έκδοση (βάλε το `ALU_AirSense_vX.pyw` στο `~`) |
+| `airsense update` | νέα έκδοση (βάλε το `AirSense_vX.pyw` στο `~`) |
 | `airsense backup` | αντίγραφο ασφαλείας δεδομένων |
 | `airsense wifi` | WiFi του Pi: σάρωση, νέο δίκτυο, αποθηκευμένα |
 | `airsense tailscale` | εγκατάσταση/σύνδεση Tailscale |
@@ -113,7 +113,7 @@ bash install_pi.sh
 
 ### 🅰 Ο πιο εύκολος τρόπος: μέσω κάρτας SD (χωρίς SSH)
 1. Κλείσε το Pi (βγάλε το ρεύμα) και βάλε την κάρτα SD στον υπολογιστή. Εμφανίζεται δίσκος **bootfs**.
-2. ALU AirSense → **⚙ Ρυθμίσεις → 🥧 Raspberry Pi → «📶 WiFi στην κάρτα SD του Pi…»**.
+2. AirSense → **⚙ Ρυθμίσεις → 🥧 Raspberry Pi → «📶 WiFi στην κάρτα SD του Pi…»**.
 3. **«📶 WiFi αυτού του υπολογιστή»** (παίρνει όνομα και κωδικό από τα Windows) ή γράψε τα με το χέρι → **➕ Προσθήκη** (όσα δίκτυα θες).
 4. **💾 Γράψε στην κάρτα SD** → Εξαγωγή κάρτας → στο Pi → ρεύμα.
 5. Σε 1–2 λεπτά: `ssh pi@airsense.local`
@@ -145,9 +145,9 @@ airsense wifi
 ---
 
 ## 8. Μεταφορά ιστορικού από τον υπολογιστή (προαιρετικό)
-1. Κλείσε το ALU AirSense στα Windows (δεξί κλικ στο 🌬 κάτω δεξιά → Έξοδος).
+1. Κλείσε το AirSense στα Windows (δεξί κλικ στο 🌬 κάτω δεξιά → Έξοδος).
 2. Στο Pi: `airsense stop`
-3. Σε PowerShell, από τον φάκελο `Documents\ALU AirSense`:
+3. Σε PowerShell, από τον φάκελο `Documents\AirSense`:
    `scp airsense.db config.json pi@airsense.local:~/airsense-data/`
 4. Στο Pi: `airsense start`
 

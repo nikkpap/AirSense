@@ -33,8 +33,8 @@ object Checker {
                 p.setActive("server", true)
                 Notifier.alert(
                     ctx, "server", p.t("⚠ Ο υπολογιστής δεν απαντά", "⚠ Server not reachable"),
-                    p.t("Το ALU AirSense στον υπολογιστή δεν απαντά. Είναι ανοιχτός ο υπολογιστής / το Tailscale;",
-                        "ALU AirSense on the PC is not responding. Is the PC / Tailscale on?") + "\n" + (e.message ?: "")
+                    p.t("Το AirSense στον υπολογιστή δεν απαντά. Είναι ανοιχτός ο υπολογιστής / το Tailscale;",
+                        "AirSense on the PC is not responding. Is the PC / Tailscale on?") + "\n" + (e.message ?: "")
                 )
             }
             return CheckResult(null, cachedWeather(p))

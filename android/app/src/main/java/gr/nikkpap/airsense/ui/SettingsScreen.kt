@@ -45,14 +45,14 @@ fun SettingsScreen(vm: MainViewModel, ui: UiState) {
         SectionTitle(tr("Σχετικά", "About"))
         HCard {
             Text("💧 AirSense ${BuildConfig.VERSION_NAME}", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-            Text(tr("Εφαρμογή για το ALU AirSense (BleBox humiditySensor)", "Companion app for ALU AirSense (BleBox humiditySensor)"))
+            Text(tr("Εφαρμογή για το AirSense (BleBox humiditySensor)", "Companion app for AirSense (BleBox humiditySensor)"))
             Spacer(Modifier.height(8.dp))
             Text("Developer: Nikolaos K. Paridis (aka nikkpap)")
             Text("ALU DEV TEAM", color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(8.dp))
             Text(tr("Καιρός: Open-Meteo.com (CC BY 4.0)", "Weather data: Open-Meteo.com (CC BY 4.0)"), fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(tr("Server: ALU AirSense v1.4.1+ στον υπολογιστή (λεκτικά μέσα/έξω: v1.5.8+)", "Server: ALU AirSense v1.4.1+ on the PC (in/out labels: v1.5.8+)"),
+            Text(tr("Server: AirSense v1.4.1+ στον υπολογιστή (λεκτικά μέσα/έξω: v1.5.8+)", "Server: AirSense v1.4.1+ on the PC (in/out labels: v1.5.8+)"),
                 fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(8.dp))
             OutlinedButton(onClick = { vm.resetSetup() }) { Text(tr("Οδηγός σύνδεσης από την αρχή", "Run connection setup again")) }

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-ALU AirSense (πρώην ALU HygroLink) — BleBox humiditySensor monitor, logger & mobile web server
+AirSense (πρώην ALU HygroLink) — BleBox humiditySensor monitor, logger & mobile web server
 ---------------------------------------------------------------------------
 * Σάρωση δικτύου (LAN) για συσκευές BleBox + σάρωση WiFi για νέους αισθητήρες
 * Ρύθμιση WiFi νέου αισθητήρα (Access Point mode 192.168.4.1)
@@ -12,8 +12,9 @@ ALU AirSense (πρώην ALU HygroLink) — BleBox humiditySensor monitor, logge
 
 Developer : Nikolaos K. Paridis (aka nikkpap) — ALU DEV TEAM
 """
-APP_NAME = "ALU AirSense"
-OLD_APP_NAME = "ALU HygroLink"          # παλιό όνομα (μεταφορά δεδομένων/ρυθμίσεων)
+APP_NAME = "AirSense"
+OLD_APP_NAMES = ("ALU HygroLink", "ALU AirSense")   # παλιά ονόματα (μεταφορά δεδομένων/ρυθμίσεων)
+OLD_APP_NAME = OLD_APP_NAMES[0]
 APP_VERSION = "1.6.0"
 AUTHOR = "Nikolaos K. Paridis (aka nikkpap)"
 TEAM = "ALU DEV TEAM"
@@ -32,7 +33,7 @@ import importlib.util
 REQUIRED = [("PyQt6", "PyQt6"), ("pyqtgraph", "pyqtgraph"), ("numpy", "numpy"), ("qrcode", "qrcode")]
 
 
-LOG_FILE = os.path.join(os.environ.get("TEMP") or os.path.expanduser("~"), "ALU_AirSense_log.txt")
+LOG_FILE = os.path.join(os.environ.get("TEMP") or os.path.expanduser("~"), "AirSense_log.txt")
 
 
 def _log(msg):
@@ -251,10 +252,11 @@ def _arg_value(flag):
 
 
 def _migrate_old_data():
-    """Μεταφορά από ALU HygroLink → ALU AirSense: φάκελος δεδομένων + βάση (μία φορά, χωρίς απώλειες)."""
+    """Μεταφορά από ALU HygroLink → AirSense: φάκελος δεδομένων + βάση (μία φορά, χωρίς απώλειες)."""
     new_d = os.path.join(_docs_dir(), APP_NAME)
-    old_d = os.path.join(_docs_dir(), OLD_APP_NAME)
-    if not os.path.exists(new_d) and os.path.isdir(old_d):
+    old_d = next((os.path.join(_docs_dir(), n) for n in reversed(OLD_APP_NAMES)
+                  if os.path.isdir(os.path.join(_docs_dir(), n))), "")
+    if not os.path.exists(new_d) and old_d:
         try:
             os.rename(old_d, new_d)
         except Exception:
@@ -2043,7 +2045,7 @@ INDEX_HTML = r"""<!doctype html><html lang="el"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0f131a" media="(prefers-color-scheme: dark)"><meta name="theme-color" content="#f4f6fa" media="(prefers-color-scheme: light)"><link rel="manifest" href="/manifest.json">
 <link rel="icon" href="/icon.svg"><link rel="apple-touch-icon" href="/icon.svg">
-<meta name="apple-mobile-web-app-capable" content="yes"><title>ALU AirSense</title>
+<meta name="apple-mobile-web-app-capable" content="yes"><title>AirSense</title>
 <style>
 :root{--bg:#0f131a;--card:#171c26;--line:#262d3b;--txt:#e6ebf5;--mut:#8b96ab;--t:#ff9f43;--h:#3fa7ff;--d:#a78bfa;--ok:#2ecc71;--bad:#ff5c5c}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
@@ -2084,7 +2086,7 @@ button.pri{background:#2b6cff!important;color:#fff}.badge{background:#e6eaf2}.wa
 .pill{color:#1a56c4}#toast{color:#fff}}
 .fd .i{font-size:26px}.pill{display:inline-block;padding:2px 10px;border-radius:99px;background:#2b6cff33;color:#9fc0ff;font-size:12px}.empty{color:var(--mut);text-align:center;padding:30px}
 </style></head><body>
-<header><div class="dot" id="dot"></div><h1>🌬 ALU AirSense</h1><span class="mut" id="hdr"></span></header>
+<header><div class="dot" id="dot"></div><h1>🌬 AirSense</h1><span class="mut" id="hdr"></span></header>
 <main>
 <div class="card" id="wx" style="display:none;margin-bottom:12px"></div>
 <div class="grid" id="devs"><div class="card empty">Φόρτωση…</div></div>
@@ -2139,7 +2141,7 @@ button.pri{background:#2b6cff!important;color:#fff}.badge{background:#e6eaf2}.wa
 <h2>Καταγραφή συμβάντων</h2>
 <div class="card log" id="log"></div>
 </main>
-<footer>ALU AirSense v__VER__ · Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM</footer>
+<footer>AirSense v__VER__ · Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM</footer>
 <div id="toast"></div>
 <script>
 let WX=null,WXP=[];
@@ -5792,11 +5794,11 @@ def _ver(v):
 
 
 def _kill_old_instances():
-    """Κλείνει παλιές εκδόσεις ALU_AirSense / ALU_HygroLink που τρέχουν (εκτός από αυτήν και τους «γονείς» της)."""
+    """Κλείνει παλιές εκδόσεις AirSense / ALU_HygroLink που τρέχουν (εκτός από αυτήν και τους «γονείς» της)."""
     if os.name != "nt":
         return
     try:
-        ps = ("Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*ALU_HygroLink*' -or $_.CommandLine -like '*ALU_AirSense*' } | "
+        ps = ("Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*ALU_HygroLink*' -or $_.CommandLine -like '*AirSense*.pyw*' } | "
               "Select-Object ProcessId,ParentProcessId,CommandLine | ConvertTo-Json -Compress")
         r = subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, text=True,
                            timeout=25, creationflags=0x08000000)
@@ -5836,7 +5838,7 @@ def main():
     if os.name == "nt":
         try:
             import ctypes
-            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("ALU.AirSense")
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("AirSense")
         except Exception:
             pass
     app = QApplication(sys.argv)
@@ -5848,7 +5850,7 @@ def main():
     old = QLocalSocket()                      # τρέχει ακόμα το παλιό «ALU HygroLink»; → κλείσ' το
     old.connectToServer("ALU_HygroLink_single_instance")
     if old.waitForConnected(300):
-        _log("Κλείνει το παλιό ALU HygroLink — το νέο όνομα είναι ALU AirSense")
+        _log("Κλείνει το παλιό ALU HygroLink — το νέο όνομα είναι AirSense")
         old.write(b"hello")
         old.flush()
         if old.waitForReadyRead(800):
@@ -5860,7 +5862,7 @@ def main():
         time.sleep(1.5)
         _kill_old_instances()
         time.sleep(0.8)
-    key = "ALU_AirSense_single_instance"
+    key = "AirSense_single_instance"
     sock = QLocalSocket()
     sock.connectToServer(key)
     if sock.waitForConnected(400):
@@ -5900,11 +5902,19 @@ def main():
             import winreg
             with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0,
                                 winreg.KEY_SET_VALUE | winreg.KEY_QUERY_VALUE) as k:
-                winreg.QueryValueEx(k, OLD_APP_NAME)
-                winreg.DeleteValue(k, OLD_APP_NAME)
+                found = False
+                for _old in OLD_APP_NAMES:
+                    try:
+                        winreg.QueryValueEx(k, _old)
+                        winreg.DeleteValue(k, _old)
+                        found = True
+                    except OSError:
+                        pass
+                if not found:
+                    raise FileNotFoundError
                 pyw = sys.executable.replace("python.exe", "pythonw.exe")
                 winreg.SetValueEx(k, APP_NAME, 0, winreg.REG_SZ, f'"{pyw}" "{os.path.abspath(sys.argv[0])}" --minimized')
-                engine.log("Αυτόματη εκκίνηση: μεταφέρθηκε στο νέο όνομα ALU AirSense")
+                engine.log("Αυτόματη εκκίνηση: μεταφέρθηκε στο νέο όνομα AirSense")
         except Exception:
             pass
     apply_theme(app, engine.cfg["ui"].get("theme", "auto"))

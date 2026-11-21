@@ -1,4 +1,4 @@
-# 🌬 ALU AirSense
+# 🌬 AirSense
 
 Παρακολούθηση, καταγραφή και ειδοποιήσεις για αισθητήρες **BleBox humiditySensor**: γραφήματα, καιρός Open-Meteo,
 διαφορά μέσα–έξω με συμβουλή αερισμού, CSV/XML, email, και πρόσβαση από το κινητό (τοπικά ή από παντού με Tailscale).
@@ -11,9 +11,9 @@
 
 | Αρχείο | Για | Πώς |
 |---|---|---|
-| `ALU_AirSense_vX.pyw` | Windows | Διπλό κλικ — εγκαθιστά μόνο του ό,τι χρειάζεται (Python 3.9–3.14, 64-bit) και ανοίγει τον Οδηγό. |
+| `AirSense_vX.pyw` | Windows | Διπλό κλικ — εγκαθιστά μόνο του ό,τι χρειάζεται (Python 3.9–3.14, 64-bit) και ανοίγει τον Οδηγό. |
 | `AirSense-Pi_vX.zip` | Raspberry Pi (24/7 server) | Δες `ODIGIES_Raspberry_Pi.md` μέσα στο zip. |
-| `AirSense-Android_vX.apk` | Android 8+ | Εγκατάσταση APK → Ρυθμίσεις → σκανάρισμα QR από τον υπολογιστή. |
+| `AirSense-Android_vX(-debug).apk` | Android 8+ | Εγκατάσταση APK → Ρυθμίσεις → σκανάρισμα QR από τον υπολογιστή. |
 
 ## 📁 Φάκελοι
 - `desktop/` — η εφαρμογή υπολογιστή (PyQt6) που είναι και server για web/κινητό.
@@ -22,7 +22,7 @@
 
 ## 🛠 Build & Release (GitHub Actions)
 - Κάθε push στο `main` → έλεγχος + build (τα αρχεία στα *Artifacts* του run).
-- Νέο Release: ανέβασε την έκδοση (`APP_VERSION` στο `desktop/ALU_AirSense.pyw`, `versionName/versionCode` στο
+- Νέο Release: ανέβασε την έκδοση (`APP_VERSION` στο `desktop/AirSense.pyw`, `versionName/versionCode` στο
   `android/app/build.gradle.kts`), γράψε στο `CHANGELOG.md`, και μετά **tag** `vX.Y.Z` (ή Actions → Build & Release →
   *Run workflow* → ✔ release).
 

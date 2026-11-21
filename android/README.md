@@ -1,6 +1,6 @@
 # 🌬 AirSense (Android) v1.2.0
 
-Εφαρμογή Android για το **ALU AirSense** (BleBox humiditySensor).
+Εφαρμογή Android για το **AirSense** (BleBox humiditySensor).
 Developer: **Nikolaos K. Paridis (aka nikkpap)** · ALU DEV TEAM
 
 ## Τι κάνει
@@ -10,7 +10,7 @@ Developer: **Nikolaos K. Paridis (aka nikkpap)** · ALU DEV TEAM
 - **Ρυθμίσεις:** σύνδεση (QR), Ελληνικά/English, θέμα, Material You.
 
 ## Απαιτήσεις
-- Στον υπολογιστή: **ALU AirSense** (πρώην ALU HygroLink) v1.4.1+ — για τη διαφορά μέσα–έξω με δικά σου λεκτικά: **v1.5.8+**.
+- Στον υπολογιστή: **AirSense** (πρώην ALU HygroLink) v1.4.1+ — για τη διαφορά μέσα–έξω με δικά σου λεκτικά: **v1.5.8+**.
 - Android 8.0+ (API 26).
 
 ## Άνοιγμα στο Android Studio
@@ -21,7 +21,7 @@ Developer: **Nikolaos K. Paridis (aka nikkpap)** · ALU DEV TEAM
    Το release APK υπογράφεται με το debug κλειδί, ώστε να εγκαθίσταται αμέσως.
 
 ## Πρώτη σύνδεση
-1. Στον υπολογιστή: ALU AirSense → καρτέλα **📱 Κινητό**.
+1. Στον υπολογιστή: AirSense → καρτέλα **📱 Κινητό**.
 2. Στο κινητό: **Σκανάρισμα QR** → σκάναρε «Τοπικό δίκτυο» (και «Tailscale» για πρόσβαση από παντού).
 3. **Δοκιμή & αποθήκευση** → **Συνέχεια**.
 

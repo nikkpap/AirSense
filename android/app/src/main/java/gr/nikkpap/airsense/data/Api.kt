@@ -12,7 +12,7 @@ class ApiException(msg: String, val code: Int = 0) : Exception(msg)
 fun enc(s: String): String = URLEncoder.encode(s, "UTF-8")
 
 /**
- * Client για τον server του ALU AirSense (.pyw).
+ * Client για τον server του AirSense (.pyw).
  * Δοκιμάζει πρώτα τη διεύθυνση που δούλεψε τελευταία, μετά τοπική και Tailscale.
  */
 class Api(private val p: Prefs) {

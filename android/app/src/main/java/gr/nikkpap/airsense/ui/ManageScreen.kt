@@ -40,7 +40,7 @@ fun ManageScreen(vm: MainViewModel, ui: UiState) {
         // ── υπολογιστής ──
         item {
             HCard {
-                Text("💻 ALU AirSense ${st?.version ?: ""}", fontWeight = FontWeight.Bold)
+                Text("💻 AirSense ${st?.version ?: ""}", fontWeight = FontWeight.Bold)
                 Text(vm.api.currentBase(), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (st != null) Text(tr("Μέτρηση κάθε ${st.pollSeconds}″", "Measuring every ${st.pollSeconds}″"), fontSize = 13.sp)
                 if (st?.scanRunning == true) {
