@@ -1,0 +1,147 @@
+name: Build & Release
+
+# Κάθε push στο main: έλεγχος + build (τα αρχεία στα Artifacts του run).
+# Tag v* (π.χ. v1.6.0) ή «Run workflow» με release=true: δημιουργεί GitHub Release με όλα τα αρχεία.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Δημιουργία Release (με tag από την έκδοση της εφαρμογής)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  desktop-pi:
+    name: Desktop (.pyw) + Raspberry Pi
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Έκδοση
+        id: ver
+        run: |
+          V=$(grep -m1 -oP '^APP_VERSION = "\K[^"]+' desktop/ALU_AirSense.pyw)
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "Έκδοση εφαρμογής: $V"
+
+      - name: Έλεγχος κώδικα
+        run: |
+          python -m py_compile desktop/ALU_AirSense.pyw pi/airsense_wifi.py
+          bash -n pi/install_pi.sh
+          # ο headless server (Raspberry Pi) πρέπει να ξεκινά χωρίς εξωτερικές βιβλιοθήκες
+          timeout 60 python desktop/ALU_AirSense.pyw --help-cli
+          timeout 60 python desktop/ALU_AirSense.pyw --data "$RUNNER_TEMP/as" --status
+
+      - name: Πακέτα
+        run: |
+          V=${{ steps.ver.outputs.version }}
+          mkdir -p dist "AirSense-Pi"
+          cp desktop/ALU_AirSense.pyw "dist/ALU_AirSense_v$V.pyw"
+          cp pi/install_pi.sh pi/airsense_wifi.py pi/install_from_windows.bat pi/ODIGIES_Raspberry_Pi.md AirSense-Pi/
+          cp desktop/ALU_AirSense.pyw "AirSense-Pi/ALU_AirSense_v$V.pyw"
+          zip -qr "dist/AirSense-Pi_v$V.zip" AirSense-Pi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AirSense-desktop-pi
+          path: dist/*
+
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Κλειδί υπογραφής (προαιρετικό — από GitHub Secrets)
+        env:
+          KS_B64: ${{ secrets.AIRSENSE_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/airsense.jks"
+            echo "AIRSENSE_KEYSTORE=$RUNNER_TEMP/airsense.jks" >> "$GITHUB_ENV"
+            echo "✔ Υπογραφή με το δικό σου κλειδί"
+          else
+            echo "ℹ Δεν υπάρχει AIRSENSE_KEYSTORE_B64 → υπογραφή debug"
+          fi
+
+      - name: Build APK
+        env:
+          AIRSENSE_KEYSTORE_PASSWORD: ${{ secrets.AIRSENSE_KEYSTORE_PASSWORD }}
+          AIRSENSE_KEY_ALIAS: ${{ secrets.AIRSENSE_KEY_ALIAS }}
+          AIRSENSE_KEY_PASSWORD: ${{ secrets.AIRSENSE_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleRelease
+          V=$(grep -m1 -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          mkdir -p ../dist
+          cp app/build/outputs/apk/release/*.apk "../dist/AirSense-Android_v$V.apk"
+          ls -la ../dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AirSense-android
+          path: dist/*.apk
+
+  release:
+    name: GitHub Release
+    needs: [desktop-pi, android]
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Σημειώσεις έκδοσης
+        run: |
+          V=${{ needs.desktop-pi.outputs.version }}
+          awk -v v="$V" '
+            $0 ~ "^## v"v"( |$)" {p=1; next}
+            p && /^## v/ {exit}
+            p {print}' CHANGELOG.md > notes.md || true
+          [ -s notes.md ] || echo "ALU AirSense v$V" > notes.md
+          cat >> notes.md <<'EOF'
+
+          ---
+          **Αρχεία**
+          - `ALU_AirSense_vX.pyw` — Windows: διπλό κλικ (εγκαθιστά μόνο του ό,τι χρειάζεται).
+          - `AirSense-Pi_vX.zip` — Raspberry Pi server (δες ODIGIES_Raspberry_Pi.md μέσα).
+          - `AirSense-Android_vX.apk` — εφαρμογή Android.
+
+          Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM
+          EOF
+          ls -la dist
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v{0}', needs.desktop-pi.outputs.version) }}
+          name: ALU AirSense v${{ needs.desktop-pi.outputs.version }}
+          body_path: notes.md
+          files: dist/*
+          make_latest: true

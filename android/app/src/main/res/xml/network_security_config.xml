@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ο server του AirSense τρέχει με http στο τοπικό δίκτυο / Tailscale -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>
