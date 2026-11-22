@@ -1,5 +1,15 @@
 # Αλλαγές — AirSense
 
+## v1.6.2
+- **Luckfox Pico Pro/Max** (Ubuntu στην κάρτα SD): πακέτο `AirSense-Luckfox_vX.zip`.
+  - Εγκατάσταση μία φορά (`install_from_windows.bat` ή `sudo bash airsense-setup.sh`): swap, python3, reportlab,
+    γραμματοσειρές, avahi (`airsense.local`), ώρα/ζώνη, υπηρεσία `airsense-boot`.
+  - Σε κάθε boot: βρίσκει μόνο του το `AirSense*.py(w)` (κάρτα, `/home/pico`, USB), εγκαθιστά νεότερη έκδοση,
+    εφαρμόζει το `airsense-settings.txt`, συμπληρώνει εξαρτήσεις και ξεκινά τον server.
+  - **Tailscale:** υπάρχει `tailscale.sh` → ON (αυτόματη εγκατάσταση/σύνδεση) · δεν υπάρχει → μόνο τοπικά.
+  - Εντολή `airsense` (status, qr, logs, update, tailscale on/off …).
+- `--set-admin` δέχεται κωδικό και από τη μεταβλητή `AIRSENSE_ADMIN_PW` (χωρίς ερώτηση).
+
 ## v1.6.1
 - **📄 Αναφορά PDF** — όμορφη αναφορά Α4: σύνοψη με κάρτες (θερμοκρασία, υγρασία, σημείο δρόσου, απόλυτη υγρασία),
   χρόνος ανά ζώνη υγρασίας + κίνδυνος μούχλας, σύγκριση μέσα–έξω με συμβουλή αερισμού, καιρός (βροχή, ηλιοφάνεια,

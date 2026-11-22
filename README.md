@@ -13,11 +13,13 @@
 |---|---|---|
 | `AirSense_vX.pyw` | Windows | Διπλό κλικ — εγκαθιστά μόνο του ό,τι χρειάζεται (Python 3.9–3.14, 64-bit) και ανοίγει τον Οδηγό. |
 | `AirSense-Pi_vX.zip` | Raspberry Pi (24/7 server) | Δες `ODIGIES_Raspberry_Pi.md` μέσα στο zip. |
+| `AirSense-Luckfox_vX.zip` | Luckfox Pico Pro/Max (Ubuntu) | Δες `ODIGIES_Luckfox.md` — μία εγκατάσταση, μετά όλα αυτόματα στο boot. |
 | `AirSense-Android_vX(-debug).apk` | Android 8+ | Εγκατάσταση APK → Ρυθμίσεις → σκανάρισμα QR από τον υπολογιστή. |
 
 ## 📁 Φάκελοι
 - `desktop/` — η εφαρμογή υπολογιστή (PyQt6) που είναι και server για web/κινητό.
 - `pi/` — installer, εργαλείο WiFi και οδηγίες για Raspberry Pi.
+- `luckfox/` — αυτόματη εκκίνηση + Tailscale on/off για Luckfox Pico Pro/Max (Ubuntu).
 - `android/` — η εφαρμογή Android (Kotlin, Jetpack Compose) — ανοίγει στο Android Studio.
 
 ## 🛠 Build & Release (GitHub Actions)

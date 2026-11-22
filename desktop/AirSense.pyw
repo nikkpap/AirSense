@@ -15,7 +15,7 @@ Developer : Nikolaos K. Paridis (aka nikkpap) — ALU DEV TEAM
 APP_NAME = "AirSense"
 OLD_APP_NAMES = ("ALU HygroLink", "ALU AirSense")   # παλιά ονόματα (μεταφορά δεδομένων/ρυθμίσεων)
 OLD_APP_NAME = OLD_APP_NAMES[0]
-APP_VERSION = "1.6.1"
+APP_VERSION = "1.6.2"
 AUTHOR = "Nikolaos K. Paridis (aka nikkpap)"
 TEAM = "ALU DEV TEAM"
 
@@ -6610,8 +6610,11 @@ def cli_main():
         if os.name != "nt":
             os.chmod(CFG_PATH, 0o600)
     if "--set-admin" in a:
-        p1 = getpass.getpass("Νέος κωδικός διαχειριστή (4+ χαρακτήρες): ")
-        p2 = getpass.getpass("Επανάληψη: ")
+        p1 = os.environ.get("AIRSENSE_ADMIN_PW")          # χωρίς ερώτηση (π.χ. από airsense-settings.txt)
+        p2 = p1
+        if not p1:
+            p1 = getpass.getpass("Νέος κωδικός διαχειριστή (4+ χαρακτήρες): ")
+            p2 = getpass.getpass("Επανάληψη: ")
         if len(p1) < 4 or p1 != p2:
             print("✖ Οι κωδικοί δεν ταιριάζουν ή είναι μικρός.")
             return 1

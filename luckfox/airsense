@@ -1,0 +1,56 @@
+#!/bin/bash
+# AirSense — εντολές για Luckfox Pico (Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM)
+APP=/opt/airsense/AirSense.py
+DATA=/var/lib/airsense
+UH=$(getent passwd "${SUDO_USER:-$(logname 2>/dev/null || echo pico)}" | cut -d: -f6); UH=${UH:-/home/pico}
+[ -d "$UH" ] || UH=/home/pico
+app() { sudo python3 "$APP" --data "$DATA" "$@"; }
+ip_() { hostname -I | awk '{print $1}'; }
+case "${1:-status}" in
+  status)
+    echo "🌬 AirSense v$(grep -m1 -oP '^APP_VERSION = "\K[^"]+' $APP 2>/dev/null) · $(systemctl is-active airsense-boot)"
+    echo "🏠 http://$(ip_):8765  ·  http://$(hostname).local:8765"
+    if command -v tailscale >/dev/null && tailscale ip -4 >/dev/null 2>&1; then echo "🌍 http://$(tailscale ip -4 | head -1):8765 (Tailscale)"
+    elif [ -f "$UH/tailscale.sh" ]; then echo "🌍 Tailscale: ON αλλά όχι συνδεδεμένο → airsense tailscale"
+    else echo "🌍 Tailscale: OFF (μόνο τοπικά)"; fi
+    free -m | awk '/Mem:/{printf "💾 RAM: %d/%d MB · ", $3, $2} /Swap:/{printf "swap %d/%d MB\n", $3, $2}'
+    app --status 2>/dev/null | tail -n +2 ;;
+  qr)       command -v qrencode >/dev/null || sudo apt-get install -y -qq qrencode
+            echo "🏠 http://$(ip_):8765"; qrencode -t ANSIUTF8 "http://$(ip_):8765"
+            if tailscale ip -4 >/dev/null 2>&1; then T="http://$(tailscale ip -4 | head -1):8765"; echo "🌍 $T"; qrencode -t ANSIUTF8 "$T"; fi ;;
+  logs)     sudo journalctl -u airsense-boot -n 80 --no-pager; echo; sudo tail -n 30 $DATA/boot.log ;;
+  live)     sudo journalctl -u airsense-boot -f ;;
+  restart)  sudo systemctl restart airsense-boot && echo "✔ Επανεκκίνηση server" ;;
+  stop)     sudo systemctl stop airsense-boot && echo "■ Σταμάτησε (ξεκινά ξανά στο reboot)" ;;
+  update)   echo "Βάλε το νέο AirSense_vX.pyw στο $UH (ή σε USB/κάρτα) — ψάχνω τώρα…"; sudo systemctl restart airsense-boot; sleep 4
+            sudo tail -n 8 $DATA/boot.log ;;
+  set-admin) app --set-admin ;;
+  set-pin)  app --set-pin "${2:-}" ;;
+  add)      app --add "$2" ;;
+  city)     shift; app --locate "$*" ;;
+  tailscale)
+    case "${2:-}" in
+      on)  cp -f /usr/local/share/airsense/tailscale.sh "$UH/tailscale.sh" 2>/dev/null || { echo "✖ λείπει το πρότυπο tailscale.sh"; exit 1; }
+           sudo chown "$(stat -c %U "$UH")": "$UH/tailscale.sh"; echo "✔ Tailscale ON (υπάρχει το $UH/tailscale.sh)"; sudo bash "$UH/tailscale.sh" ;;
+      off) [ -f "$UH/tailscale.sh" ] && mv -f "$UH/tailscale.sh" "$UH/tailscale.sh.off"
+           sudo tailscale down 2>/dev/null; sudo systemctl disable --now tailscaled 2>/dev/null
+           echo "✔ Tailscale OFF — μόνο τοπικά (το αρχείο έγινε tailscale.sh.off)" ;;
+      *)   if [ -f "$UH/tailscale.sh" ]; then sudo bash "$UH/tailscale.sh"; else echo "Tailscale OFF → airsense tailscale on"; fi ;;
+    esac ;;
+  uninstall) sudo systemctl disable --now airsense-boot; sudo rm -f /etc/systemd/system/airsense-boot.service /usr/local/sbin/airsense-boot
+             sudo rm -rf /opt/airsense; echo "✔ Αφαιρέθηκε (τα δεδομένα μένουν στο $DATA)"; sudo rm -f /usr/local/bin/airsense ;;
+  *) cat <<EOF
+airsense               κατάσταση + διευθύνσεις
+airsense qr            QR για το κινητό
+airsense logs | live   μηνύματα / ζωντανά
+airsense restart       επανεκκίνηση server
+airsense update        ψάχνει νέο AirSense_vX.pyw και το βάζει
+airsense set-admin     κωδικός διαχειριστή
+airsense set-pin 1234  PIN για τη web σελίδα (κενό = χωρίς)
+airsense add 192.168.1.241   προσθήκη αισθητήρα
+airsense city Πτολεμαΐδα     τοποθεσία για τον καιρό
+airsense tailscale [on|off]  Tailscale (σύνδεση / ON / OFF)
+airsense uninstall
+EOF
+  ;;
+esac
