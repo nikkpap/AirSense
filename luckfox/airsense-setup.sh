@@ -41,14 +41,15 @@ progress() {
   echo "──── $msg" >> "$PROG_LOG"
   if [ ! -t 1 ]; then "$@" >>"$PROG_LOG" 2>&1; return $?; fi
   ( "$@" >>"$PROG_LOG" 2>&1 ) &
-  local pid=$! t0 el w=24 pos=0 dir=1 bar last cols
-  t0=$(date +%s); cols=$(tput cols 2>/dev/null || echo 100)
+  local pid=$! t0 el w=24 pos=0 dir=1 bar line cols
+  t0=$(date +%s); cols=$(tput cols 2>/dev/null); [ "${cols:-0}" -gt 20 ] 2>/dev/null || cols=$(stty size 2>/dev/null | awk '{print $2}'); [ "${cols:-0}" -gt 20 ] 2>/dev/null || cols=80
   printf '\033[?25l'
   while kill -0 "$pid" 2>/dev/null; do
     el=$(( $(date +%s) - t0 ))
     bar=$(printf '%*s' "$pos" '' | tr ' ' '-')'#####'$(printf '%*s' $((w - pos)) '' | tr ' ' '-')
-    last=$(tail -n 1 "$PROG_LOG" 2>/dev/null | tr -d '\r\033' | sed 's/[[:cntrl:]]//g' | cut -c1-$((cols - ${#msg} - 45)))
-    printf '\r  [%s] %s  %02d:%02d  %s\033[K' "$bar" "$msg" $((el / 60)) $((el % 60)) "$last"
+    line=$(printf '  [%s] %s  %02d:%02d  %s' "$bar" "$msg" $((el / 60)) $((el % 60)) \
+      "$(tail -n 1 "$PROG_LOG" 2>/dev/null | tr -d '\r\033' | LC_ALL=C sed 's/[[:cntrl:]]//g; s/[^ -~]/?/g')")
+    printf '\r%s\033[K' "$(printf '%s' "$line" | LC_ALL=C cut -c1-$((cols > 20 ? cols - 2 : 78)))"
     pos=$((pos + dir)); { [ $pos -ge $w ] || [ $pos -le 0 ]; } && dir=$((-dir))
     sleep 0.4
   done
@@ -117,7 +118,7 @@ APP_SRC=$(ls -1 "$HERE"/AirSense_v*.pyw "$HERE"/AirSense*.py "$HERE"/AirSense*.p
 ok "App: $(basename "$APP_SRC")"
 progress "Internet check" timeout 10 bash -c 'exec 3<>/dev/tcp/ports.ubuntu.com/80' \
   || warn "No internet? — needed for packages / Tailscale / updates (Ethernet cable to the router?)"
-progress "Free space for systemd (/run → 32MB)" grow_run || warn "Could not enlarge /run"
+progress "Free space for systemd (/run -> 32MB)" grow_run || warn "Could not enlarge /run"
 
 # ── 2. Swap ────────────────────────────────────────────────────────────────
 step 2 "Swap (extra memory on the SD card)"
@@ -166,7 +167,7 @@ install_files() {
   echo "$USER_NAME" > /var/lib/airsense/user
 }
 progress "Copying files" install_files || die "Copying files failed"
-progress "System services (boot · /run · auto-update)" bash "$HERE/post-update.sh" || warn "Services: see $PROG_LOG"
+progress "System services (boot, /run, auto-update)" bash "$HERE/post-update.sh" || warn "Services: see $PROG_LOG"
 systemctl is-enabled airsense-boot >/dev/null 2>&1 || die "The service was not enabled — send a screenshot"
 systemctl enable systemd-networkd-wait-online >/dev/null 2>&1 || true
 ok "airsense-boot: starts on every boot, restarts if it stops"
