@@ -23,6 +23,34 @@ ask()  {
     echo "   Γράψε Y (ναι) ή N (όχι) — ή Enter για ${hint%%/*}"
   done
 }
+# ── Ένδειξη προόδου: γραμμή που κινείται + χρόνος + τι κάνει τώρα (για να φαίνεται ότι δεν κόλλησε) ──
+# χρήση: progress "Μήνυμα" εντολή ορίσματα…   (η έξοδος της εντολής πάει στο $PROG_LOG)
+PROG_LOG=${PROG_LOG:-/tmp/airsense-progress.log}
+progress() {
+  local msg=$1; shift
+  : > "$PROG_LOG"
+  if [ ! -t 1 ]; then "$@" >>"$PROG_LOG" 2>&1; return $?; fi      # χωρίς οθόνη (boot): απλά τρέχει
+  ( "$@" >>"$PROG_LOG" 2>&1 ) &
+  local pid=$! t0 el w=24 pos=0 dir=1 bar last cols
+  t0=$(date +%s)
+  cols=$(tput cols 2>/dev/null || echo 100)
+  printf '\033[?25l'                                               # κρύβει τον κέρσορα
+  while kill -0 "$pid" 2>/dev/null; do
+    el=$(( $(date +%s) - t0 ))
+    bar=$(printf '%*s' "$pos" '' | tr ' ' '-')'#####'$(printf '%*s' $((w - pos)) '' | tr ' ' '-')
+    last=$(tail -n 1 "$PROG_LOG" 2>/dev/null | tr -d '\r\033' | sed 's/[[:cntrl:]]//g' | cut -c1-$((cols - ${#msg} - 45)))
+    printf '\r  [%s] %s  %02d:%02d  %s\033[K' "$bar" "$msg" $((el / 60)) $((el % 60)) "$last"
+    pos=$((pos + dir)); { [ $pos -ge $w ] || [ $pos -le 0 ]; } && dir=$((-dir))
+    sleep 0.4
+  done
+  wait "$pid"; local rc=$?
+  el=$(( $(date +%s) - t0 ))
+  printf '\r\033[K\033[?25h'
+  if [ $rc = 0 ]; then printf '  \033[1;32m✔\033[0m %s  (%02d:%02d)\n' "$msg" $((el / 60)) $((el % 60))
+  else printf '  \033[1;31m✖\033[0m %s  (%02d:%02d) — δες %s\n' "$msg" $((el / 60)) $((el % 60)) "$PROG_LOG"; fi
+  return $rc
+}
+
 # /run μικρό λόγω λίγης RAM → το systemd αρνείται daemon-reload (θέλει 16MB ελεύθερα)
 grow_run() { mount -o remount,size=32M /run 2>/dev/null; }
 # Όνομα συσκευής — απευθείας στα αρχεία (το hostnamectl αποτυγχάνει σε αυτή την εικόνα)
@@ -90,9 +118,9 @@ if [ -z "$NEED" ]; then
 else
   echo "   Χρειάζονται:$NEED  (σε αυτή την πλακέτα παίρνει 5–15 λεπτά — μην το κλείσεις)"
   pgrep -x apt-get >/dev/null || pgrep -x dpkg >/dev/null && echo "   … περιμένω να τελειώσει άλλη εγκατάσταση (apt/dpkg)"
-  dpkg --configure -a >/dev/null 2>&1 || true
-  timeout 1200 $APT update 2>&1 | grep --line-buffered -E "^(Get|Hit|Err|E:)" | sed 's/^/   /' || warn "apt update απέτυχε"
-  timeout 1800 $APT install --no-install-recommends $NEED 2>&1 | grep --line-buffered -E "^(Get:|Setting up|Unpacking|E:)" | sed 's/^/   /' \
+  progress "Έλεγχος dpkg" dpkg --configure -a || true
+  progress "Λίστες πακέτων (apt update)" timeout 1200 $APT update || warn "apt update απέτυχε"
+  progress "Εγκατάσταση πακέτων" timeout 1800 $APT install --no-install-recommends $NEED \
     || warn "Κάποια πακέτα δεν μπήκαν — θα ξαναδοκιμάσει στο boot"
 fi
 python3 -c "import reportlab" 2>/dev/null && ok "python3 $(python3 -V | cut -d' ' -f2) + reportlab" || warn "χωρίς reportlab (τα PDF θα δοκιμάσουν αργότερα)"

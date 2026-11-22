@@ -16,10 +16,38 @@ AUTHKEY=""
 LOGIN_FILE=/var/lib/airsense/tailscale-login.txt
 [ "$(id -u)" = 0 ] || exec sudo bash "$0" "$@"
 mkdir -p /var/lib/airsense
+PROG_LOG=/tmp/tailscale-install.log
+# ── Ένδειξη προόδου: γραμμή που κινείται + χρόνος + τι κάνει τώρα (για να φαίνεται ότι δεν κόλλησε) ──
+# χρήση: progress "Μήνυμα" εντολή ορίσματα…   (η έξοδος της εντολής πάει στο $PROG_LOG)
+PROG_LOG=${PROG_LOG:-/tmp/airsense-progress.log}
+progress() {
+  local msg=$1; shift
+  : > "$PROG_LOG"
+  if [ ! -t 1 ]; then "$@" >>"$PROG_LOG" 2>&1; return $?; fi      # χωρίς οθόνη (boot): απλά τρέχει
+  ( "$@" >>"$PROG_LOG" 2>&1 ) &
+  local pid=$! t0 el w=24 pos=0 dir=1 bar last cols
+  t0=$(date +%s)
+  cols=$(tput cols 2>/dev/null || echo 100)
+  printf '\033[?25l'                                               # κρύβει τον κέρσορα
+  while kill -0 "$pid" 2>/dev/null; do
+    el=$(( $(date +%s) - t0 ))
+    bar=$(printf '%*s' "$pos" '' | tr ' ' '-')'#####'$(printf '%*s' $((w - pos)) '' | tr ' ' '-')
+    last=$(tail -n 1 "$PROG_LOG" 2>/dev/null | tr -d '\r\033' | sed 's/[[:cntrl:]]//g' | cut -c1-$((cols - ${#msg} - 45)))
+    printf '\r  [%s] %s  %02d:%02d  %s\033[K' "$bar" "$msg" $((el / 60)) $((el % 60)) "$last"
+    pos=$((pos + dir)); { [ $pos -ge $w ] || [ $pos -le 0 ]; } && dir=$((-dir))
+    sleep 0.4
+  done
+  wait "$pid"; local rc=$?
+  el=$(( $(date +%s) - t0 ))
+  printf '\r\033[K\033[?25h'
+  if [ $rc = 0 ]; then printf '  \033[1;32m✔\033[0m %s  (%02d:%02d)\n' "$msg" $((el / 60)) $((el % 60))
+  else printf '  \033[1;31m✖\033[0m %s  (%02d:%02d) — δες %s\n' "$msg" $((el / 60)) $((el % 60)) "$PROG_LOG"; fi
+  return $rc
+}
 
 if ! command -v tailscale >/dev/null; then
-  echo "… εγκατάσταση Tailscale (1–3 λεπτά)"
-  if ! curl -fsSL --max-time 60 https://tailscale.com/install.sh | timeout 900 sh >/tmp/tailscale-install.log 2>&1; then
+  echo "  Εγκατάσταση Tailscale — σε αυτή την πλακέτα 5–15 λεπτά (η γραμμή κινείται = δουλεύει)"
+  if ! progress "Tailscale" bash -c 'curl -fsSL --max-time 60 https://tailscale.com/install.sh | timeout 1200 sh'; then
     echo "✖ Η εγκατάσταση Tailscale απέτυχε (internet;) — δες /tmp/tailscale-install.log"
     exit 1
   fi
