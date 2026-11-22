@@ -1,5 +1,11 @@
 # Αλλαγές — AirSense
 
+## v1.6.4
+- Luckfox: **αυτόματη ενημέρωση από το GitHub** (`airsense-update.timer`: 10' μετά το boot και κάθε 6 ώρες).
+  Κατεβάζει, ελέγχει (py_compile) και εγκαθιστά τη νέα έκδοση· κρατά δεδομένα, ρυθμίσεις και το AUTHKEY του Tailscale.
+  `airsense update` (τώρα), `airsense autoupdate on|off`, ή `AUTO_UPDATE=off` στο airsense-settings.txt.
+- `post-update.sh`: οι υπηρεσίες συστήματος ενημερώνονται μαζί με κάθε νέα έκδοση.
+
 ## v1.6.3
 - Luckfox: **εγκατάσταση με μία εντολή** (`get.sh`, πάντα η τελευταία έκδοση) — και για ενημέρωση.
 - Ερωτήσεις **Y/N** (Enter = ναι· δέχεται και ν/ναι, ο/όχι).

@@ -92,51 +92,19 @@ timedatectl set-timezone Europe/Athens 2>/dev/null && ok "Ζώνη ώρας: Eur
 step "4/6 AirSense + αυτόματη εκκίνηση"
 install -d /opt/airsense /var/lib/airsense
 install -m 755 "$HERE/airsense-boot.sh" /usr/local/sbin/airsense-boot
+install -m 755 "$HERE/airsense-update.sh" /usr/local/sbin/airsense-update
 install -m 755 "$HERE/airsense" /usr/local/bin/airsense
 install -D -m 755 "$HERE/tailscale.sh" /usr/local/share/airsense/tailscale.sh
-sed -i 's/\r$//' /usr/local/sbin/airsense-boot /usr/local/bin/airsense
+sed -i 's/\r$//' /usr/local/sbin/airsense-boot /usr/local/sbin/airsense-update /usr/local/bin/airsense "$HERE/post-update.sh"
 # η εφαρμογή στον φάκελο του χρήστη (εκεί τη βρίσκει το boot — αντικατάστησέ τη για ενημέρωση)
 rm -f "$USER_HOME"/AirSense_v*.pyw
 cp -f "$APP_SRC" "$USER_HOME/$(basename "$APP_SRC")"
 [ -f "$HERE/airsense-settings.txt" ] && [ ! -f "$USER_HOME/airsense-settings.txt" ] && cp "$HERE/airsense-settings.txt" "$USER_HOME/"
 chown "$USER_NAME": "$USER_HOME"/AirSense_v*.pyw "$USER_HOME/airsense-settings.txt" 2>/dev/null
-cat > /etc/systemd/system/airsense-boot.service <<EOF
-[Unit]
-Description=AirSense server (BleBox humiditySensor) — αυτόματη εκκίνηση
-Wants=network-online.target time-sync.target
-After=network-online.target time-sync.target
-
-[Service]
-Type=simple
-ExecStart=/usr/local/sbin/airsense-boot
-Restart=always
-RestartSec=10
-TimeoutStartSec=infinity
-Environment=PYTHONUNBUFFERED=1
-Nice=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
+echo "$USER_NAME" > /var/lib/airsense/user
 grow_run && ok "/run → 32MB (χώρος για το systemd)"
-# μόνιμα: σε κάθε εκκίνηση, πριν από οτιδήποτε άλλο
-cat > /etc/systemd/system/airsense-run-size.service <<'UNIT'
-[Unit]
-Description=AirSense — μεγαλύτερο /run (λίγη RAM)
-DefaultDependencies=no
-After=local-fs.target
-Before=sysinit.target
-
-[Service]
-Type=oneshot
-ExecStart=/bin/mount -o remount,size=32M /run
-
-[Install]
-WantedBy=sysinit.target
-UNIT
-systemctl daemon-reload || { grow_run; systemctl daemon-reload; } || warn "daemon-reload απέτυχε"
-systemctl enable airsense-run-size >/dev/null 2>&1
-systemctl enable airsense-boot >/dev/null 2>&1
+bash "$HERE/post-update.sh"     # υπηρεσίες: airsense-boot, airsense-run-size, airsense-update.timer
+ok "Αυτόματη ενημέρωση από το GitHub: ON (10' μετά το boot και κάθε 6 ώρες · airsense autoupdate off)"
 systemctl is-enabled airsense-boot >/dev/null 2>&1 || die "Η υπηρεσία δεν ενεργοποιήθηκε — στείλε screenshot"
 systemctl enable systemd-networkd-wait-online >/dev/null 2>&1 || true
 ok "Υπηρεσία airsense-boot (ξεκινά σε κάθε εκκίνηση, ξανανοίγει αν κλείσει)"
@@ -182,7 +150,7 @@ echo -e "  🏠 Τοπικά:   ${B}http://$IP:8765${N}   ή   ${B}http://$(host
 TSIP=$(tailscale ip -4 2>/dev/null | head -1); [ -n "$TSIP" ] && echo -e "  🌍 Tailscale: ${B}http://$TSIP:8765${N}"
 echo -e "  📱 QR για το κινητό: ${B}airsense qr${N}     · κατάσταση: ${B}airsense${N}"
 echo -e "  🔐 Κωδικός διαχειριστή: ${B}airsense set-admin${N} (ή ADMIN_PASSWORD στο ~/airsense-settings.txt)"
-echo -e "  🔄 Ενημέρωση: βάλε νέο AirSense_vX.pyw στο $USER_HOME (ή USB) και κάνε ${B}sudo reboot${N}"
+echo -e "  🔄 Ενημέρωση: ${B}αυτόματη${N} από το GitHub (κάθε 6 ώρες) · τώρα: ${B}airsense update${N}"
 echo -e "${G}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${N}"
 command -v qrencode >/dev/null && qrencode -t ANSIUTF8 "http://$IP:8765"
 

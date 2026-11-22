@@ -26,11 +26,11 @@ echo.
 echo [1/2] Αντιγραφή αρχείων (θα ζητήσει τον κωδικό: luckfox)...
 ssh -o StrictHostKeyChecking=accept-new %PIUSER%@%PIHOST% "mkdir -p ~/airsense-setup"
 if errorlevel 1 goto err
-scp "%~dp0airsense-setup.sh" "%~dp0airsense-boot.sh" "%~dp0airsense" "%~dp0tailscale.sh" "%~dp0airsense-settings.txt" "%APPF%" %PIUSER%@%PIHOST%:airsense-setup/
+scp "%~dp0airsense-setup.sh" "%~dp0airsense-boot.sh" "%~dp0airsense" "%~dp0tailscale.sh" "%~dp0airsense-update.sh" "%~dp0post-update.sh" "%~dp0airsense-settings.txt" "%APPF%" %PIUSER%@%PIHOST%:airsense-setup/
 if errorlevel 1 goto err
 echo.
 echo [2/2] Εγκατάσταση (ξανά ο κωδικός, για sudo)...
-ssh -t %PIUSER%@%PIHOST% "cd ~/airsense-setup && sed -i 's/\r$//' airsense-setup.sh airsense-boot.sh airsense tailscale.sh airsense-settings.txt && sudo bash airsense-setup.sh"
+ssh -t %PIUSER%@%PIHOST% "cd ~/airsense-setup && sed -i 's/\r$//' *.sh airsense airsense-settings.txt && sudo bash airsense-setup.sh"
 echo.
 echo Τελείωσε! Άνοιξε στο κινητό τη διεύθυνση που φαίνεται παραπάνω (http://IP:8765).
 pause

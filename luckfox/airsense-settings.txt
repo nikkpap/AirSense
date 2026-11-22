@@ -20,4 +20,7 @@ CITY=Πτολεμαΐδα
 # Όνομα συσκευής στο δίκτυο (→ http://ΟΝΟΜΑ.local:8765)
 HOSTNAME=airsense
 
+# Αυτόματη ενημέρωση από το GitHub (on/off) — κάθε 6 ώρες
+AUTO_UPDATE=on
+
 # Tailscale: ΔΕΝ ρυθμίζεται εδώ. Υπάρχει το αρχείο tailscale.sh → ON · δεν υπάρχει → μόνο τοπικά.
