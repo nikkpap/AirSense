@@ -17,6 +17,7 @@ APP=$APP_DIR/AirSense.py
 DATA=/var/lib/airsense
 SCAN=/run/airsense-scan
 LOG=$DATA/boot.log
+mount -o remount,size=32M /run 2>/dev/null   # λίγη RAM: χώρος για systemd/apt (π.χ. εγκατάσταση Tailscale)
 mkdir -p "$APP_DIR" "$DATA" "$SCAN"
 exec > >(tee -a "$LOG") 2>&1
 echo "──── $(date '+%F %T') · airsense-boot ────"
@@ -109,7 +110,11 @@ if [ -f "$DATA/settings.applied" ] && ! cmp -s "$DATA/settings.applied" "$DATA/s
   [ -n "$P" ] && run --set-pin "$P"
   if [ -n "$S" ]; then IFS=', ' read -ra L <<< "$S"; for ip in "${L[@]}"; do [ -n "$ip" ] && run --add "$ip"; done; fi
   [ -n "$C" ] && run --locate "$C"
-  if [ -n "$H" ] && [ "$H" != "$(hostname)" ]; then hostnamectl set-hostname "$H" && sed -i "s/^127\.0\.1\.1.*/127.0.1.1\t$H/" /etc/hosts && echo "   όνομα: $H"; fi
+  if [ -n "$H" ] && [ "$H" != "$(hostname)" ]; then
+    O=$(hostname); echo "$H" > /etc/hostname
+    if grep -q "^127\.0\.1\.1" /etc/hosts; then sed -i "s/^127\.0\.1\.1.*/127.0.1.1\t$H/" /etc/hosts; else echo -e "127.0.1.1\t$H" >> /etc/hosts; fi
+    sed -i "s/\b$O\b/$H/g" /etc/hosts; hostname "$H"; systemctl restart avahi-daemon 2>/dev/null; echo "   όνομα: $H"
+  fi
   cp -f "$DATA/settings.applied" "$DATA/settings.done"
   echo "✔ Ρυθμίσεις εφαρμόστηκαν"
 fi

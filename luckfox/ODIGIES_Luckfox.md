@@ -38,13 +38,22 @@
 - εφαρμογή **Fing** στο κινητό (σάρωση δικτύου).
 
 ## Βήμα 3 — Εγκατάσταση (ΜΙΑ φορά)
-### Εύκολα από Windows
+### ⭐ Πιο εύκολα: μία εντολή (κατεβάζει πάντα την τελευταία έκδοση)
+Μπες με ssh (`ssh pico@IP`, κωδικός `luckfox` — ή με PuTTY/MobaXterm) και γράψε:
+```bash
+wget -qO get.sh https://raw.githubusercontent.com/nikkpap/AirSense/main/luckfox/get.sh && sudo bash get.sh
+```
+Οι ερωτήσεις είναι **Y/N** — πάτα **Enter** για την προεπιλογή (Y). Όλα τα υπόλοιπα γίνονται μόνα τους:
+swap, πακέτα, `/run` 32MB (λίγη RAM), όνομα **airsense**, υπηρεσία εκκίνησης, Tailscale, και στο τέλος επανεκκίνηση για έλεγχο.
+Την ίδια εντολή τρέχεις και για **ενημέρωση** σε νέα έκδοση.
+
+### Από Windows (χωρίς internet στην πλακέτα για το κατέβασμα)
 1. Αποσυμπίεσε το **AirSense-Luckfox_vX.zip** σε έναν φάκελο.
 2. (Προαιρετικά) άνοιξε το **airsense-settings.txt** και γράψε κωδικό διαχειριστή, IP αισθητήρα, πόλη.
 3. Διπλό κλικ στο **install_from_windows.bat** → γράψε την **IP** → κωδικός **luckfox** (2 φορές).
-4. Στην ερώτηση «Θέλεις Tailscale;» → **ν** (από παντού) ή **ο** (μόνο τοπικά).
+4. Στις ερωτήσεις **Y/N**: **Enter** = ναι. Στο «Θέλεις Tailscale;» → **Y** (από παντού) ή **N** (μόνο τοπικά).
 
-### Ή με ssh (για όποιον προτιμά)
+### Ή χειροκίνητα με scp
 ```bash
 scp -r AirSense-Luckfox pico@IP:~/airsense-setup
 ssh pico@IP                 # κωδικός: luckfox
@@ -66,7 +75,8 @@ sudo bash ~/airsense-setup/airsense-setup.sh
 6. Ξεκινά τον server — αν κάποτε κλείσει, ξανανοίγει μόνος του.
 
 ### 🔄 Ενημέρωση έκδοσης
-Βάλε το νέο `AirSense_vX.pyw` στο `/home/pico` (ή σε στικάκι USB στην πλακέτα) → `sudo reboot`.
+Η ίδια εντολή του Βήματος 3 (`wget -qO get.sh … && sudo bash get.sh`) — **ή** βάλε το νέο `AirSense_vX.pyw`
+στο `/home/pico` (ή σε στικάκι USB στην πλακέτα) → `sudo reboot`.
 Τα δεδομένα (ιστορικό, ρυθμίσεις) μένουν στο `/var/lib/airsense`.
 
 ### 🌍 Tailscale ON / OFF
@@ -96,6 +106,12 @@ sudo bash ~/airsense-setup/airsense-setup.sh
 | `airsense tailscale on/off` | Tailscale |
 
 ---
+
+## Γνωστά θέματα της εικόνας Ubuntu (λύνονται αυτόματα από v1.6.3)
+- «Refusing to reload, not enough space available on /run/systemd»: το `/run` είναι μικρό λόγω RAM → το setup το κάνει
+  32MB και το κρατά μόνιμα (υπηρεσία `airsense-run-size`). Χειροκίνητα: `sudo mount -o remount,size=32M /run`.
+- «Could not set static hostname»: το `hostnamectl` δεν δουλεύει εδώ → το όνομα γράφεται απευθείας στο `/etc/hostname`.
+- Ώρα Κίνας (UTC+8): το setup βάζει ζώνη **Europe/Athens**.
 
 ## Σημειώσεις για την πλακέτα
 - **Μνήμη:** η Pro έχει 128MB (λιγότερα στην πράξη) → η εγκατάσταση φτιάχνει **swap 512MB** στην κάρτα.

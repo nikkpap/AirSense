@@ -1,5 +1,13 @@
 # Αλλαγές — AirSense
 
+## v1.6.3
+- Luckfox: **εγκατάσταση με μία εντολή** (`get.sh`, πάντα η τελευταία έκδοση) — και για ενημέρωση.
+- Ερωτήσεις **Y/N** (Enter = ναι· δέχεται και ν/ναι, ο/όχι).
+- Διόρθωση: μικρό `/run` (λίγη RAM) → μεγαλώνει σε 32MB στο setup και σε κάθε boot (`airsense-run-size`), ώστε να
+  δουλεύουν `daemon-reload` / apt / Tailscale· η υπηρεσία ενεργοποιείται και ξεκινά σίγουρα (`enable --now`).
+- Διόρθωση: όνομα συσκευής «airsense» γράφεται απευθείας (`/etc/hostname`, `/etc/hosts`) — το `hostnamectl` αποτύγχανε.
+- Στο τέλος: «Επανεκκίνηση τώρα;» για έλεγχο ότι όλα ξεκινούν μόνα τους.
+
 ## v1.6.2
 - **Luckfox Pico Pro/Max** (Ubuntu στην κάρτα SD): πακέτο `AirSense-Luckfox_vX.zip`.
   - Εγκατάσταση μία φορά (`install_from_windows.bat` ή `sudo bash airsense-setup.sh`): swap, python3, reportlab,

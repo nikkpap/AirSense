@@ -12,7 +12,31 @@ ok()   { echo -e "${G}✔${N} $*"; }
 warn() { echo -e "${Y}⚠${N} $*"; }
 die()  { echo -e "${R}✖ $*${N}"; exit 1; }
 step() { echo -e "\n${B}━━ $* ━━${N}"; }
-ask()  { local a; read -r -p "$(echo -e "${Y}?${N} $1 [${2:-ν}/ο]: ")" a; a=${a:-${2:-ν}}; [[ "$a" =~ ^(y|Y|ν|Ν|yes|ναι|Ναι)$ ]]; }
+# Ερώτηση Y/N — Enter = η προεπιλογή (κεφαλαίο). Δέχεται y/yes/ν/ναι και n/no/ο/όχι.
+ask()  {
+  local a d=${2:-y} hint
+  [[ "$d" =~ ^(y|Y|ν|Ν)$ ]] && hint="Y/n" || hint="y/N"
+  while true; do
+    read -r -p "$(echo -e "${Y}?${N} $1 (${hint}): ")" a
+    a=${a:-$d}
+    case "$a" in y|Y|yes|YES|Yes|ν|Ν|ναι|Ναι|ΝΑΙ) return 0 ;; n|N|no|NO|No|ο|Ο|όχι|οχι|Όχι|ΟΧΙ) return 1 ;; esac
+    echo "   Γράψε Y (ναι) ή N (όχι) — ή Enter για ${hint%%/*}"
+  done
+}
+# /run μικρό λόγω λίγης RAM → το systemd αρνείται daemon-reload (θέλει 16MB ελεύθερα)
+grow_run() { mount -o remount,size=32M /run 2>/dev/null; }
+# Όνομα συσκευής — απευθείας στα αρχεία (το hostnamectl αποτυγχάνει σε αυτή την εικόνα)
+set_name() {
+  local new=$1 old; old=$(hostname)
+  [ "$new" = "$old" ] && return 0
+  echo "$new" > /etc/hostname
+  if grep -q "^127\.0\.1\.1" /etc/hosts; then sed -i "s/^127\.0\.1\.1.*/127.0.1.1\t$new/" /etc/hosts
+  else echo -e "127.0.1.1\t$new" >> /etc/hosts; fi
+  sed -i "s/\b$old\b/$new/g" /etc/hosts
+  hostname "$new" 2>/dev/null
+  systemctl restart avahi-daemon 2>/dev/null
+  [ "$(cat /etc/hostname)" = "$new" ]
+}
 
 [ "$(id -u)" = 0 ] || exec sudo bash "$0" "$@"
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -21,7 +45,7 @@ USER_NAME=${SUDO_USER:-pico}
 USER_HOME=$(getent passwd "$USER_NAME" | cut -d: -f6); USER_HOME=${USER_HOME:-/root}
 NONINTERACTIVE=0; [ -t 0 ] || NONINTERACTIVE=1
 for a in "$@"; do [ "$a" = "-y" ] && NONINTERACTIVE=1; done
-[ "$NONINTERACTIVE" = 1 ] && ask() { [[ "${2:-ν}" =~ ^(ν|y)$ ]]; }
+[ "$NONINTERACTIVE" = 1 ] && ask() { [[ "${2:-y}" =~ ^(ν|y|Y)$ ]]; }
 
 echo -e "${B}"
 echo "   🌬  AirSense — εγκατάσταση σε Luckfox Pico"
@@ -94,17 +118,33 @@ Nice=5
 [Install]
 WantedBy=multi-user.target
 EOF
-systemctl daemon-reload
+grow_run && ok "/run → 32MB (χώρος για το systemd)"
+# μόνιμα: σε κάθε εκκίνηση, πριν από οτιδήποτε άλλο
+cat > /etc/systemd/system/airsense-run-size.service <<'UNIT'
+[Unit]
+Description=AirSense — μεγαλύτερο /run (λίγη RAM)
+DefaultDependencies=no
+After=local-fs.target
+Before=sysinit.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/mount -o remount,size=32M /run
+
+[Install]
+WantedBy=sysinit.target
+UNIT
+systemctl daemon-reload || { grow_run; systemctl daemon-reload; } || warn "daemon-reload απέτυχε"
+systemctl enable airsense-run-size >/dev/null 2>&1
 systemctl enable airsense-boot >/dev/null 2>&1
+systemctl is-enabled airsense-boot >/dev/null 2>&1 || die "Η υπηρεσία δεν ενεργοποιήθηκε — στείλε screenshot"
 systemctl enable systemd-networkd-wait-online >/dev/null 2>&1 || true
 ok "Υπηρεσία airsense-boot (ξεκινά σε κάθε εκκίνηση, ξανανοίγει αν κλείσει)"
 
 # ── 5. Όνομα στο δίκτυο ───────────────────────────────────────────────────
 step "5/6 Όνομα στο δίκτυο"
-if [ "$(hostname)" != "airsense" ] && ask "Όνομα συσκευής «airsense» (→ http://airsense.local:8765);" ν; then
-  hostnamectl set-hostname airsense
-  grep -q "127.0.1.1" /etc/hosts && sed -i "s/^127\.0\.1\.1.*/127.0.1.1\tairsense/" /etc/hosts || echo -e "127.0.1.1\tairsense" >> /etc/hosts
-  systemctl restart avahi-daemon 2>/dev/null
+if [ "$(hostname)" != "airsense" ] && ask "Όνομα συσκευής «airsense» (→ http://airsense.local:8765);" y; then
+  set_name airsense || warn "Δεν άλλαξε το όνομα — μένει $(hostname)"
 fi
 ok "Όνομα: $(hostname) → http://$(hostname).local:8765"
 
@@ -113,7 +153,7 @@ step "6/6 Tailscale (πρόσβαση από παντού)"
 echo "   Κανόνας: υπάρχει το ~/tailscale.sh → Tailscale ON σε κάθε boot · δεν υπάρχει → μόνο τοπικά."
 if [ -f "$USER_HOME/tailscale.sh" ]; then
   ok "Υπάρχει ήδη το $USER_HOME/tailscale.sh (ON)"
-elif ask "Θέλεις Tailscale;" ν; then
+elif ask "Θέλεις Tailscale (πρόσβαση από παντού);" y; then
   cp -f "$HERE/tailscale.sh" "$USER_HOME/tailscale.sh"; chown "$USER_NAME": "$USER_HOME/tailscale.sh"; chmod 755 "$USER_HOME/tailscale.sh"
   ok "Tailscale ON"
 else
@@ -122,6 +162,8 @@ fi
 [ -f "$USER_HOME/tailscale.sh" ] && bash "$USER_HOME/tailscale.sh"
 
 # ── Εκκίνηση ──────────────────────────────────────────────────────────────
+grow_run
+systemctl enable --now airsense-boot >/dev/null 2>&1
 systemctl restart airsense-boot
 echo -n "   Ξεκινά ο server"
 for i in $(seq 1 60); do
@@ -143,3 +185,9 @@ echo -e "  🔐 Κωδικός διαχειριστή: ${B}airsense set-admin${N
 echo -e "  🔄 Ενημέρωση: βάλε νέο AirSense_vX.pyw στο $USER_HOME (ή USB) και κάνε ${B}sudo reboot${N}"
 echo -e "${G}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${N}"
 command -v qrencode >/dev/null && qrencode -t ANSIUTF8 "http://$IP:8765"
+
+echo
+if ask "Επανεκκίνηση τώρα, για έλεγχο ότι όλα ξεκινούν μόνα τους;" y; then
+  echo "   Επανεκκίνηση… σε 1–2 λεπτά: http://$(hostname).local:8765"
+  sleep 2; reboot
+fi

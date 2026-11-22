@@ -59,6 +59,7 @@ jobs:
           cp desktop/AirSense.pyw "AirSense-Luckfox/AirSense_v$V.pyw"
           chmod 755 AirSense-Luckfox/*.sh AirSense-Luckfox/airsense
           zip -qr "dist/AirSense-Luckfox_v$V.zip" AirSense-Luckfox
+          cp "dist/AirSense-Luckfox_v$V.zip" dist/AirSense-Luckfox.zip   # σταθερό όνομα για το get.sh (latest)
 
       - uses: actions/upload-artifact@v4
         with:
