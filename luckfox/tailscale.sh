@@ -12,6 +12,7 @@
 # Optional: auth key to log in WITHOUT a browser
 # (tailscale.com → Settings → Keys → Generate auth key) e.g. AUTHKEY="tskey-auth-xxxxxxxx"
 AUTHKEY=""
+AUTHKEY=${AIRSENSE_TS_AUTHKEY:-$AUTHKEY}     # (the boot service / airsense command pass the key of your copy)
 
 LOGIN_FILE=/var/lib/airsense/tailscale-login.txt
 [ "$(id -u)" = 0 ] || exec sudo bash "$0" "$@"
@@ -56,8 +57,22 @@ if ! command -v tailscale >/dev/null; then
   fi
 fi
 
-progress "Starting Tailscale" systemctl enable --now tailscaled
-progress "Waiting for Tailscale" wait_daemon
+# This board's kernel may have no TUN device → run Tailscale in userspace mode (still reaches port 8765)
+need_userspace() { [ -c /dev/net/tun ] && return 1; modprobe tun 2>/dev/null; [ -c /dev/net/tun ] && return 1; return 0; }
+if need_userspace; then
+  if ! grep -q "userspace-networking" /etc/default/tailscaled 2>/dev/null; then
+    if grep -q '^FLAGS=' /etc/default/tailscaled 2>/dev/null; then
+      sed -i 's/^FLAGS="\(.*\)"/FLAGS="\1 --tun=userspace-networking"/' /etc/default/tailscaled
+    else
+      echo 'FLAGS="--tun=userspace-networking"' >> /etc/default/tailscaled
+    fi
+    echo "  ℹ No TUN device on this kernel → Tailscale in userspace mode"
+    systemctl restart tailscaled 2>/dev/null
+  fi
+fi
+progress "Starting Tailscale" bash -c 'systemctl enable tailscaled; systemctl restart tailscaled; sleep 3; systemctl is-active tailscaled' 
+progress "Waiting for Tailscale" wait_daemon || {
+  echo "  ✖ tailscaled does not start:"; systemctl status tailscaled --no-pager 2>&1 | tail -n 6 | sed 's/^/     /'; exit 1; }
 
 if [ "$(ts_state)" = "Running" ]; then
   rm -f "$LOGIN_FILE"
@@ -74,7 +89,7 @@ fi
 
 # Browser login: grab the link and keep it in tailscale-login.txt
 OUT=$(mktemp)
-( tailscale up --hostname="$(hostname)" --accept-dns=false >"$OUT" 2>&1 & )
+( timeout 300 tailscale up --hostname="$(hostname)" --accept-dns=false >"$OUT" 2>&1 & )
 get_url() {
   for i in $(seq 1 30); do
     grep -q 'https://login\.tailscale\.com/' "$OUT" && return 0

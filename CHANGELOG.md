@@ -1,5 +1,8 @@
 # Αλλαγές — AirSense
 
+## v1.6.8
+- Luckfox Tailscale: αν ο kernel δεν έχει TUN → userspace mode αυτόματα· έλεγχος ότι ξεκινά το tailscaled (δείχνει το σφάλμα αν όχι)· όριο χρόνου στο login· τρέχει πάντα η νεότερη λογική με το δικό σου AUTHKEY.
+
 ## v1.6.7
 - Luckfox scripts **στα αγγλικά** (setup, boot, update, tailscale, εντολή `airsense`, settings, .bat).
 - **Μπάρα παντού:** συνολική πρόοδος `[#####.....] Step 3/6` + κινούμενη μπάρα με χρόνο και τρέχουσα ενέργεια σε κάθε εργασία (internet, swap, apt, αρχεία, υπηρεσίες, όνομα, Tailscale, εκκίνηση server).

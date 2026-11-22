@@ -42,7 +42,11 @@ case "${1:-status}" in
       off) [ -f "$UH/tailscale.sh" ] && mv -f "$UH/tailscale.sh" "$UH/tailscale.sh.off"
            sudo tailscale down 2>/dev/null; sudo systemctl disable --now tailscaled 2>/dev/null
            echo "✔ Tailscale OFF — local only (file renamed to tailscale.sh.off)" ;;
-      *)   if [ -f "$UH/tailscale.sh" ]; then sudo bash "$UH/tailscale.sh"; else echo "Tailscale OFF → airsense tailscale on"; fi ;;
+      *)   if [ -f "$UH/tailscale.sh" ]; then
+             K=$(grep -m1 -oP '^AUTHKEY="\K[^"]*' "$UH/tailscale.sh")
+             T=/usr/local/share/airsense/tailscale.sh; [ -f "$T" ] || T="$UH/tailscale.sh"
+             sudo AIRSENSE_TS_AUTHKEY="$K" bash "$T"
+           else echo "Tailscale OFF → airsense tailscale on"; fi ;;
     esac ;;
   uninstall) sudo systemctl disable --now airsense-boot airsense-update.timer; sudo rm -f /etc/systemd/system/airsense-boot.service /etc/systemd/system/airsense-update.* /usr/local/sbin/airsense-boot /usr/local/sbin/airsense-update
              sudo rm -rf /opt/airsense; echo "✔ Removed (data is kept in $DATA)"; sudo rm -f /usr/local/bin/airsense ;;

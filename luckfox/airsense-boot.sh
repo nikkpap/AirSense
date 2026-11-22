@@ -123,8 +123,10 @@ fi
 if [ -n "$TS_SCRIPT" ]; then
   echo "🌍 Found $TS_SCRIPT → Tailscale ON"
   sed -i 's/\r$//' /run/airsense-tailscale.sh
+  TSK=$(grep -m1 -oP '^AUTHKEY="\K[^"]*' /run/airsense-tailscale.sh)
+  TST=/usr/local/share/airsense/tailscale.sh; [ -f "$TST" ] || TST=/run/airsense-tailscale.sh   # newest logic, your key
   # in the background, so the server starts right away (even if the internet is slow)
-  ( online || sleep 20; bash /run/airsense-tailscale.sh 2>&1 | sed 's/^/   [tailscale] /' >> "$LOG" ) &
+  ( online || sleep 20; AIRSENSE_TS_AUTHKEY="$TSK" bash "$TST" 2>&1 | sed 's/^/   [tailscale] /' >> "$LOG" ) &
 else
   if command -v tailscale >/dev/null && systemctl is-enabled tailscaled >/dev/null 2>&1; then
     tailscale down >/dev/null 2>&1
