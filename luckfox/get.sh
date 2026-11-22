@@ -14,7 +14,7 @@ H=$(getent passwd "$U" | cut -d: -f6); H=${H:-/root}
 cd "$H"
 echo "… εργαλεία (wget, unzip)"
 command -v wget >/dev/null && command -v unzip >/dev/null || {
-  apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq wget unzip >/dev/null; }
+  apt-get -o DPkg::Lock::Timeout=600 update -qq && DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 install -y -qq wget unzip >/dev/null; }
 echo "… κατέβασμα τελευταίας έκδοσης AirSense"
 rm -rf AirSense-Luckfox AirSense-Luckfox.zip
 wget -q --show-progress -O AirSense-Luckfox.zip \

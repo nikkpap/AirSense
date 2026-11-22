@@ -80,10 +80,21 @@ fi
 # ── 3. Πακέτα ──────────────────────────────────────────────────────────────
 step "3/6 Πακέτα (python3, reportlab για PDF, γραμματοσειρές, avahi για airsense.local)"
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq || warn "apt update απέτυχε"
-apt-get install -y -qq --no-install-recommends python3 python3-reportlab fonts-dejavu-core avahi-daemon curl \
-  ca-certificates qrencode util-linux >/dev/null 2>&1 \
-  || apt-get install -y -qq python3 curl ca-certificates || warn "Κάποια πακέτα δεν μπήκαν — θα ξαναδοκιμάσει στο boot"
+APT="apt-get -y -o DPkg::Lock::Timeout=600 -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold"
+NEED=""
+for pkg in python3 python3-reportlab fonts-dejavu-core avahi-daemon curl ca-certificates qrencode; do
+  dpkg -s "$pkg" >/dev/null 2>&1 || NEED="$NEED $pkg"
+done
+if [ -z "$NEED" ]; then
+  ok "Όλα τα πακέτα υπάρχουν ήδη"
+else
+  echo "   Χρειάζονται:$NEED  (σε αυτή την πλακέτα παίρνει 5–15 λεπτά — μην το κλείσεις)"
+  pgrep -x apt-get >/dev/null || pgrep -x dpkg >/dev/null && echo "   … περιμένω να τελειώσει άλλη εγκατάσταση (apt/dpkg)"
+  dpkg --configure -a >/dev/null 2>&1 || true
+  timeout 1200 $APT update 2>&1 | grep -E "^(Get|Hit|Err|E:)" | sed 's/^/   /' || warn "apt update απέτυχε"
+  timeout 1800 $APT install --no-install-recommends $NEED 2>&1 | grep -E "^(Get:|Setting up|Unpacking|E:)" | sed 's/^/   /' \
+    || warn "Κάποια πακέτα δεν μπήκαν — θα ξαναδοκιμάσει στο boot"
+fi
 python3 -c "import reportlab" 2>/dev/null && ok "python3 $(python3 -V | cut -d' ' -f2) + reportlab" || warn "χωρίς reportlab (τα PDF θα δοκιμάσουν αργότερα)"
 systemctl enable --now systemd-timesyncd >/dev/null 2>&1 && ok "Συγχρονισμός ώρας (NTP)"
 timedatectl set-timezone Europe/Athens 2>/dev/null && ok "Ζώνη ώρας: Europe/Athens"
