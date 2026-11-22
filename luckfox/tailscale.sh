@@ -26,12 +26,12 @@ progress() {
   echo "──── $msg" >> "$PROG_LOG"
   if [ ! -t 1 ]; then "$@" >>"$PROG_LOG" 2>&1; return $?; fi
   ( "$@" >>"$PROG_LOG" 2>&1 ) &
-  local pid=$! t0 el w=24 pos=0 dir=1 bar line cols
+  local pid=$! t0 el w=24 pos=0 dir=1 bar line cols DASHES='------------------------'
   t0=$(date +%s); cols=$(tput cols 2>/dev/null); [ "${cols:-0}" -gt 20 ] 2>/dev/null || cols=$(stty size 2>/dev/null | awk '{print $2}'); [ "${cols:-0}" -gt 20 ] 2>/dev/null || cols=80
   printf '\033[?25l'
   while kill -0 "$pid" 2>/dev/null; do
     el=$(( $(date +%s) - t0 ))
-    bar=$(printf '%*s' "$pos" '' | tr ' ' '-')'#####'$(printf '%*s' $((w - pos)) '' | tr ' ' '-')
+    bar="${DASHES:0:pos}#####${DASHES:0:w-pos}"
     line=$(printf '  [%s] %s  %02d:%02d  %s' "$bar" "$msg" $((el / 60)) $((el % 60)) \
       "$(tail -n 1 "$PROG_LOG" 2>/dev/null | tr -d '\r\033' | LC_ALL=C sed 's/[[:cntrl:]]//g; s/[^ -~]/?/g')")
     printf '\r%s\033[K' "$(printf '%s' "$line" | LC_ALL=C cut -c1-$((cols > 20 ? cols - 2 : 78)))"

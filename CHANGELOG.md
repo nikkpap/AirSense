@@ -1,5 +1,8 @@
 # Αλλαγές — AirSense
 
+## v1.6.10
+- Luckfox Tailscale: το setup ανανεώνει το ~/tailscale.sh (κρατά το AUTHKEY) και τρέχει πάντα τη νέα έκδοση· απλούστερη μπάρα (διόρθωση «syntax error near unexpected token»).
+
 ## v1.6.9
 - Luckfox: διόρθωση μπάρας προόδου («cut: invalid byte or character range», γραμμές που γέμιζαν την οθόνη σε στενό παράθυρο) — η γραμμή κόβεται πάντα στο πλάτος του τερματικού.
 

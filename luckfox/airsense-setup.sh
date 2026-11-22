@@ -41,12 +41,12 @@ progress() {
   echo "──── $msg" >> "$PROG_LOG"
   if [ ! -t 1 ]; then "$@" >>"$PROG_LOG" 2>&1; return $?; fi
   ( "$@" >>"$PROG_LOG" 2>&1 ) &
-  local pid=$! t0 el w=24 pos=0 dir=1 bar line cols
+  local pid=$! t0 el w=24 pos=0 dir=1 bar line cols DASHES='------------------------'
   t0=$(date +%s); cols=$(tput cols 2>/dev/null); [ "${cols:-0}" -gt 20 ] 2>/dev/null || cols=$(stty size 2>/dev/null | awk '{print $2}'); [ "${cols:-0}" -gt 20 ] 2>/dev/null || cols=80
   printf '\033[?25l'
   while kill -0 "$pid" 2>/dev/null; do
     el=$(( $(date +%s) - t0 ))
-    bar=$(printf '%*s' "$pos" '' | tr ' ' '-')'#####'$(printf '%*s' $((w - pos)) '' | tr ' ' '-')
+    bar="${DASHES:0:pos}#####${DASHES:0:w-pos}"
     line=$(printf '  [%s] %s  %02d:%02d  %s' "$bar" "$msg" $((el / 60)) $((el % 60)) \
       "$(tail -n 1 "$PROG_LOG" 2>/dev/null | tr -d '\r\033' | LC_ALL=C sed 's/[[:cntrl:]]//g; s/[^ -~]/?/g')")
     printf '\r%s\033[K' "$(printf '%s' "$line" | LC_ALL=C cut -c1-$((cols > 20 ? cols - 2 : 78)))"
@@ -184,14 +184,21 @@ ok "Name: $(hostname) → http://$(hostname).local:8765"
 step 6 "Tailscale (access from anywhere)"
 echo -e "  ${D}Rule: ~/tailscale.sh exists → Tailscale ON on every boot · missing → local only.${N}"
 if [ -f "$USER_HOME/tailscale.sh" ]; then
-  ok "$USER_HOME/tailscale.sh already exists (ON)"
+  # refresh the user's copy to the new version, keeping its AUTHKEY (the file is the ON switch)
+  TSK=$(grep -m1 -oP '^AUTHKEY="\K[^"]*' "$USER_HOME/tailscale.sh" 2>/dev/null)
+  cp -f "$HERE/tailscale.sh" "$USER_HOME/tailscale.sh"; chown "$USER_NAME": "$USER_HOME/tailscale.sh"; chmod 755 "$USER_HOME/tailscale.sh"
+  [ -n "$TSK" ] && sed -i "s|^AUTHKEY=\"\"|AUTHKEY=\"$TSK\"|" "$USER_HOME/tailscale.sh"
+  ok "$USER_HOME/tailscale.sh exists (ON) — updated"
 elif ask "Do you want Tailscale (access from anywhere)?" y; then
   cp -f "$HERE/tailscale.sh" "$USER_HOME/tailscale.sh"; chown "$USER_NAME": "$USER_HOME/tailscale.sh"; chmod 755 "$USER_HOME/tailscale.sh"
   ok "Tailscale ON"
 else
   ok "Local only (turn Tailscale on later with: airsense tailscale on)"
 fi
-[ -f "$USER_HOME/tailscale.sh" ] && bash "$USER_HOME/tailscale.sh"
+if [ -f "$USER_HOME/tailscale.sh" ]; then
+  TSK=$(grep -m1 -oP '^AUTHKEY="\K[^"]*' "$USER_HOME/tailscale.sh" 2>/dev/null)
+  AIRSENSE_TS_AUTHKEY="$TSK" bash /usr/local/share/airsense/tailscale.sh || warn "Tailscale: see /tmp/tailscale-install.log"
+fi
 
 # ── Start ──────────────────────────────────────────────────────────────────
 echo -e "\n${B}[$(printf '%*s' 30 '' | tr ' ' '#')] Done — starting the server${N}"
