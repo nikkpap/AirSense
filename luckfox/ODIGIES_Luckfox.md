@@ -118,7 +118,9 @@ sudo bash ~/airsense-setup/airsense-setup.sh
 
 ---
 
-## Γνωστά θέματα της εικόνας Ubuntu (λύνονται αυτόματα από v1.6.3)
+## Γνωστά θέματα της εικόνας Ubuntu (λύνονται αυτόματα)
+- Τυχαία MAC → νέα IP σε κάθε εκκίνηση: από v1.6.11 σταθερή MAC (η IP αλλάζει μία φορά, μετά μένει). `airsense mac` → κράτηση IP στο router.
+- Tailscale: από v1.6.11 μπαίνει από το επίσημο στατικό πακέτο (χωρίς apt), σε δική του υπηρεσία· log: `/var/lib/airsense/tailscale.log`.
 - «Refusing to reload, not enough space available on /run/systemd»: το `/run` είναι μικρό λόγω RAM → το setup το κάνει
   32MB και το κρατά μόνιμα (υπηρεσία `airsense-run-size`). Χειροκίνητα: `sudo mount -o remount,size=32M /run`.
 - «Could not set static hostname»: το `hostnamectl` δεν δουλεύει εδώ → το όνομα γράφεται απευθείας στο `/etc/hostname`.

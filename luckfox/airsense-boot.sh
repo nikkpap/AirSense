@@ -125,10 +125,15 @@ if [ -n "$TS_SCRIPT" ]; then
   sed -i 's/\r$//' /run/airsense-tailscale.sh
   TSK=$(grep -m1 -oP '^AUTHKEY="\K[^"]*' /run/airsense-tailscale.sh)
   TST=/usr/local/share/airsense/tailscale.sh; [ -f "$TST" ] || TST=/run/airsense-tailscale.sh   # newest logic, your key
-  # in the background, so the server starts right away (even if the internet is slow)
-  ( online || sleep 20; AIRSENSE_TS_AUTHKEY="$TSK" bash "$TST" 2>&1 | sed 's/^/   [tailscale] /' >> "$LOG" ) &
+  # own transient service: the server starts right away, and a server restart never kills a running install
+  if ! systemctl is-active --quiet airsense-tailscale 2>/dev/null; then
+    systemd-run --unit=airsense-tailscale --collect --no-block --quiet \
+      --setenv=AIRSENSE_TS_AUTHKEY="$TSK" /bin/bash -c "sleep 15; bash '$TST' >> /var/lib/airsense/tailscale.log 2>&1" \
+      || ( sleep 15; AIRSENSE_TS_AUTHKEY="$TSK" bash "$TST" >> /var/lib/airsense/tailscale.log 2>&1 ) &
+  fi
+  echo "   (Tailscale log: /var/lib/airsense/tailscale.log)"
 else
-  if command -v tailscale >/dev/null && systemctl is-enabled tailscaled >/dev/null 2>&1; then
+  if command -v tailscale >/dev/null && systemctl is-enabled --quiet tailscaled 2>/dev/null; then
     tailscale down >/dev/null 2>&1
     systemctl disable --now tailscaled >/dev/null 2>&1
     echo "🏠 No tailscale.sh → local only (Tailscale OFF)"

@@ -2,7 +2,8 @@
 # AirSense — commands for Luckfox Pico (Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM)
 APP=/opt/airsense/AirSense.py
 DATA=/var/lib/airsense
-UH=$(getent passwd "${SUDO_USER:-$(logname 2>/dev/null || echo pico)}" | cut -d: -f6); UH=${UH:-/home/pico}
+U=$(cat /var/lib/airsense/user 2>/dev/null); U=${U:-${SUDO_USER:-$(logname 2>/dev/null || echo pico)}}
+UH=$(getent passwd "$U" | cut -d: -f6); UH=${UH:-/home/pico}
 [ -d "$UH" ] || UH=/home/pico
 app() { sudo python3 "$APP" --data "$DATA" "$@"; }
 ip_() { hostname -I | awk '{print $1}'; }
@@ -18,10 +19,12 @@ case "${1:-status}" in
   qr)       command -v qrencode >/dev/null || sudo apt-get install -y -qq qrencode
             echo "🏠 http://$(ip_):8765"; qrencode -t ANSIUTF8 "http://$(ip_):8765"
             if tailscale ip -4 >/dev/null 2>&1; then T="http://$(tailscale ip -4 | head -1):8765"; echo "🌍 $T"; qrencode -t ANSIUTF8 "$T"; fi ;;
-  logs)     sudo journalctl -u airsense-boot -n 80 --no-pager; echo; sudo tail -n 30 $DATA/boot.log ;;
+  logs)     sudo journalctl -u airsense-boot -n 60 --no-pager; echo; sudo tail -n 30 $DATA/boot.log
+            echo; echo "── Tailscale ──"; sudo tail -n 15 $DATA/tailscale.log 2>/dev/null ;;
   live)     sudo journalctl -u airsense-boot -f ;;
   restart)  sudo systemctl restart airsense-boot && echo "✔ Server restarted" ;;
   stop)     sudo systemctl stop airsense-boot && echo "■ Stopped (starts again on reboot)" ;;
+  mac)      cat /var/lib/airsense/mac.txt 2>/dev/null || ip -o link | awk '/ether/{print $2, $(NF-2)}' ;;
   update)   echo "🔄 Checking GitHub for a new version…"; sudo /usr/local/sbin/airsense-update --force ;;
   autoupdate)
     case "${2:-}" in
@@ -53,6 +56,7 @@ case "${1:-status}" in
   *) cat <<EOF
 airsense                     status + addresses
 airsense qr                  QR codes for the phone
+airsense mac                 fixed network address (MAC) — for a DHCP reservation in the router
 airsense logs | live         messages / live log
 airsense restart             restart the server
 airsense update              check GitHub + update now

@@ -47,12 +47,58 @@ progress() {
 }
 trap 'printf "\033[?25h"' EXIT
 
+# only one Tailscale setup at a time (boot service + installer could start it together)
+exec 9>/run/airsense-tailscale.lock
+if ! flock -n 9; then
+  echo "  ℹ Another Tailscale setup is already running (started at boot) — waiting for it"
+  progress "Waiting for the other Tailscale setup" flock -w 1800 9 || { echo "  ✖ still busy — try later: airsense tailscale"; exit 1; }
+fi
+
 ts_state() { tailscale status --json 2>/dev/null | grep -m1 -oE '"BackendState": *"[A-Za-z]+"' | grep -oE '[A-Za-z]+"$' | tr -d '"'; }
 wait_daemon() { for i in $(seq 1 30); do tailscale status --json >/dev/null 2>&1 && return 0; echo "waiting for tailscaled … $i"; sleep 2; done; return 1; }
 
-if ! command -v tailscale >/dev/null; then
-  echo "  Installing Tailscale — on this board 5–15 minutes (moving bar = working)"
-  if ! progress "Installing Tailscale" bash -c 'curl -fsSL --max-time 60 https://tailscale.com/install.sh | timeout 1200 sh'; then
+# ── Install: official static package from pkgs.tailscale.com (NO apt → fast and light on 84MB RAM) ──
+ts_arch() { case "$(uname -m)" in armv7*|armv6*|armhf) echo arm ;; aarch64|arm64) echo arm64 ;; x86_64) echo amd64 ;; i?86) echo 386 ;; *) echo "" ;; esac; }
+cleanup_old() {
+  # an older attempt (install.sh + apt) may still be running or half-finished → stop it and repair dpkg
+  pkill -f "tailscale.com/install.sh" 2>/dev/null
+  pkill -f "pkgs.tailscale.com" 2>/dev/null
+  rm -f /etc/apt/sources.list.d/tailscale.list
+  if pgrep -x apt-get >/dev/null || pgrep -x dpkg >/dev/null; then
+    echo "an older install is still running — stopping it"; pkill -x apt-get; sleep 3
+  fi
+  dpkg --configure -a 2>&1 | tail -n 3
+  return 0
+}
+install_static() {
+  local A F V T=/tmp/ts-install
+  A=$(ts_arch); [ -n "$A" ] || { echo "unsupported CPU $(uname -m)"; return 1; }
+  echo "asking pkgs.tailscale.com for the latest version ($A)…"
+  F=$(curl -fsSL --max-time 30 "https://pkgs.tailscale.com/stable/?mode=json" | grep -oE "\"$A\": *\"tailscale_[^\"]+\.tgz\"" | grep -oE 'tailscale_[^"]+\.tgz' | head -1)
+  [ -n "$F" ] || { echo "could not read the version list (internet?)"; return 1; }
+  rm -rf "$T"; mkdir -p "$T"
+  echo "downloading $F …"
+  ( curl -fsSL --max-time 900 -o "$T/ts.tgz" "https://pkgs.tailscale.com/stable/$F" ) &
+  local cp=$!
+  while kill -0 $cp 2>/dev/null; do echo "downloaded $(( $(stat -c %s "$T/ts.tgz" 2>/dev/null || echo 0) / 1048576 )) MB of $F"; sleep 2; done
+  wait $cp || { echo "download failed"; return 1; }
+  echo "unpacking…"; tar -xzf "$T/ts.tgz" -C "$T" || return 1
+  local D; D=$(find "$T" -maxdepth 1 -type d -name 'tailscale_*' | head -1)
+  echo "installing binaries…"
+  install -m 755 "$D/tailscale"  /usr/bin/tailscale
+  install -m 755 "$D/tailscaled" /usr/sbin/tailscaled
+  install -m 644 "$D/systemd/tailscaled.service" /etc/systemd/system/tailscaled.service
+  [ -f /etc/default/tailscaled ] || install -m 644 "$D/systemd/tailscaled.defaults" /etc/default/tailscaled
+  mkdir -p /var/lib/tailscale
+  systemctl daemon-reload 2>/dev/null || { mount -o remount,size=32M /run; systemctl daemon-reload; }
+  rm -rf "$T"
+  echo "tailscale $(tailscale version 2>/dev/null | head -1) installed"
+}
+
+if ! command -v tailscale >/dev/null || ! command -v tailscaled >/dev/null; then
+  echo "  Installing Tailscale (official static package, ~30MB — 1–5 minutes)"
+  progress "Cleaning up older attempts" cleanup_old
+  if ! progress "Installing Tailscale" install_static; then
     echo "  ✖ Tailscale install failed (internet?) — see $PROG_LOG"
     exit 1
   fi

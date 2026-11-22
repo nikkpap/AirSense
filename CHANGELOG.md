@@ -1,5 +1,15 @@
 # Αλλαγές — AirSense
 
+## v1.6.11 — review των scripts του Luckfox
+- **Tailscale χωρίς apt:** εγκατάσταση από το επίσημο στατικό πακέτο (pkgs.tailscale.com, ~30MB) αντί για install.sh + apt —
+  γρήγορο και ελαφρύ για 84MB RAM· καθαρίζει μισοτελειωμένες παλιές προσπάθειες (apt/dpkg)· μπάρα με MB που κατέβηκαν.
+- **Tailscale σε δική του υπηρεσία στο boot** (`airsense-tailscale`, systemd-run): ο server ξεκινά αμέσως και μια επανεκκίνηση
+  του server δεν σκοτώνει ποτέ εγκατάσταση στη μέση· κλείδωμα ώστε να μην τρέχουν δύο εγκαταστάσεις μαζί· log: `/var/lib/airsense/tailscale.log`.
+- **Σειρά setup:** ο server ξεκινά στο Step 5 — το Tailscale (Step 6) δεν μπλοκάρει πια τίποτα (Ctrl+C σταματά μόνο το Tailscale).
+- **Σταθερή MAC/IP:** η πλακέτα έπαιρνε τυχαία MAC → νέα IP σε κάθε boot. Τώρα σταθερή MAC (από το machine-id) → ίδια IP·
+  `airsense mac` για κράτηση IP στο router.
+- Ctrl+C σταματά καθαρά την τρέχουσα εργασία· `airsense logs` δείχνει και το Tailscale· η εντολή `airsense` βρίσκει σωστά τον χρήστη.
+
 ## v1.6.10
 - Luckfox Tailscale: το setup ανανεώνει το ~/tailscale.sh (κρατά το AUTHKEY) και τρέχει πάντα τη νέα έκδοση· απλούστερη μπάρα (διόρθωση «syntax error near unexpected token»).
 

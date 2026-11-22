@@ -61,6 +61,7 @@ progress() {
   return $rc
 }
 trap 'printf "\033[?25h"' EXIT
+trap 'printf "\r\033[K\033[?25h"; kill $(jobs -p) 2>/dev/null; echo -e "\n  ${Y}⚠${N} Stopped (Ctrl+C). Run the same command again to continue."; exit 130' INT
 
 # /run is tiny on this board (little RAM) → systemd refuses daemon-reload (needs 16MB free)
 grow_run() { mount -o remount,size=32M /run 2>/dev/null; }
@@ -83,6 +84,22 @@ make_swap() {
   chmod 600 $SW && mkswap $SW && swapon $SW || return 1
   grep -q "^$SW " /etc/fstab || echo "$SW none swap sw 0 0" >> /etc/fstab
   echo "vm.swappiness=20" > /etc/sysctl.d/90-airsense.conf; sysctl -q -p /etc/sysctl.d/90-airsense.conf
+}
+# Fixed MAC: this board gets a random MAC (→ new IP) on every boot. A .link file keeps one MAC forever,
+# derived from the machine-id, so the router always gives the same IP (or you can reserve it).
+fixed_mac() {
+  local ifc mac
+  ifc=$(ip -o link | awk -F': ' '/link\/ether/{print $2; exit}' | cut -d@ -f1)
+  [ -n "$ifc" ] || { echo "no Ethernet interface"; return 1; }
+  if [ -f /etc/systemd/network/10-airsense-mac.link ]; then
+    mac=$(grep -m1 '^MACAddress=' /etc/systemd/network/10-airsense-mac.link | cut -d= -f2)
+  else
+    mac=$(printf '02:%s:%s:%s:%s:%s' $(md5sum /etc/machine-id | cut -c1-10 | sed 's/../& /g'))
+    mkdir -p /etc/systemd/network
+    printf '[Match]\nOriginalName=%s\n\n[Link]\nMACAddress=%s\nNamePolicy=kernel\n' "$ifc" "$mac" > /etc/systemd/network/10-airsense-mac.link
+  fi
+  echo "$ifc $mac" > /var/lib/airsense/mac.txt
+  echo "$ifc → $mac (active after reboot)"
 }
 wait_server() {
   for i in $(seq 1 90); do
@@ -173,12 +190,21 @@ systemctl enable systemd-networkd-wait-online >/dev/null 2>&1 || true
 ok "airsense-boot: starts on every boot, restarts if it stops"
 ok "Auto-update from GitHub: ON (10 min after boot and every 6 hours · airsense autoupdate off)"
 
-# ── 5. Network name ────────────────────────────────────────────────────────
-step 5 "Network name"
+# ── 5. Network + start the server ──────────────────────────────────────────
+step 5 "Network name, fixed address, start the server"
 if [ "$(hostname)" != "airsense" ] && ask "Name this device «airsense» (→ http://airsense.local:8765)?" y; then
   progress "Renaming to airsense" set_name airsense || warn "Name not changed — stays $(hostname)"
 fi
 ok "Name: $(hostname) → http://$(hostname).local:8765"
+if [ -f /etc/systemd/network/10-airsense-mac.link ] || ask "Keep the same network address (MAC → same IP) after every reboot?" y; then
+  progress "Fixed network address (MAC)" fixed_mac && ok "MAC: $(cut -d' ' -f2 /var/lib/airsense/mac.txt) — the IP may change ONCE after the next reboot, then stays" \
+    || warn "Fixed MAC not set"
+fi
+grow_run
+systemctl enable airsense-boot >/dev/null 2>&1
+systemctl restart airsense-boot
+progress "Starting the AirSense server" wait_server && SRV=1 || SRV=0
+[ "$SRV" = 1 ] && ok "The server is running: http://$(hostname -I | awk '{print $1}'):8765" || warn "The server is slow to start — check: airsense logs"
 
 # ── 6. Tailscale ───────────────────────────────────────────────────────────
 step 6 "Tailscale (access from anywhere)"
@@ -196,18 +222,14 @@ else
   ok "Local only (turn Tailscale on later with: airsense tailscale on)"
 fi
 if [ -f "$USER_HOME/tailscale.sh" ]; then
+  echo -e "  ${D}(the server is already running — Ctrl+C here only stops the Tailscale setup; it retries on every boot)${N}"
   TSK=$(grep -m1 -oP '^AUTHKEY="\K[^"]*' "$USER_HOME/tailscale.sh" 2>/dev/null)
-  AIRSENSE_TS_AUTHKEY="$TSK" bash /usr/local/share/airsense/tailscale.sh || warn "Tailscale: see /tmp/tailscale-install.log"
+  AIRSENSE_TS_AUTHKEY="$TSK" timeout 1800 bash /usr/local/share/airsense/tailscale.sh || warn "Tailscale not ready yet — later: airsense tailscale"
 fi
 
-# ── Start ──────────────────────────────────────────────────────────────────
-echo -e "\n${B}[$(printf '%*s' 30 '' | tr ' ' '#')] Done — starting the server${N}"
-grow_run
-systemctl enable --now airsense-boot >/dev/null 2>&1
-systemctl restart airsense-boot
-progress "Starting the AirSense server" wait_server && SRV=1 || SRV=0
+# ── Summary ────────────────────────────────────────────────────────────────
+echo -e "\n${B}[$(printf '%*s' 30 '' | tr ' ' '#')] Done${N}"
 IP=$(hostname -I | awk '{print $1}')
-[ "$SRV" = 1 ] && ok "The server is running!" || warn "The server is slow to start — check: airsense logs"
 echo -e "\n${G}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${N}"
 echo -e "  🏠 Local:     ${B}http://$IP:8765${N}   or   ${B}http://$(hostname).local:8765${N}"
 TSIP=$(tailscale ip -4 2>/dev/null | head -1); [ -n "$TSIP" ] && echo -e "  🌍 Tailscale: ${B}http://$TSIP:8765${N}"
