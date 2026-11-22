@@ -1,5 +1,5 @@
 #!/bin/bash
-# AirSense — εντολές για Luckfox Pico (Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM)
+# AirSense — commands for Luckfox Pico (Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM)
 APP=/opt/airsense/AirSense.py
 DATA=/var/lib/airsense
 UH=$(getent passwd "${SUDO_USER:-$(logname 2>/dev/null || echo pico)}" | cut -d: -f6); UH=${UH:-/home/pico}
@@ -8,11 +8,11 @@ app() { sudo python3 "$APP" --data "$DATA" "$@"; }
 ip_() { hostname -I | awk '{print $1}'; }
 case "${1:-status}" in
   status)
-    echo "🌬 AirSense v$(grep -m1 -oP '^APP_VERSION = "\K[^"]+' $APP 2>/dev/null) · $(systemctl is-active airsense-boot) · αυτόματη ενημέρωση: $([ -f $DATA/autoupdate.off ] && echo OFF || echo ON)"
+    echo "🌬 AirSense v$(grep -m1 -oP '^APP_VERSION = "\K[^"]+' $APP 2>/dev/null) · $(systemctl is-active airsense-boot) · auto-update: $([ -f $DATA/autoupdate.off ] && echo OFF || echo ON)"
     echo "🏠 http://$(ip_):8765  ·  http://$(hostname).local:8765"
     if command -v tailscale >/dev/null && tailscale ip -4 >/dev/null 2>&1; then echo "🌍 http://$(tailscale ip -4 | head -1):8765 (Tailscale)"
-    elif [ -f "$UH/tailscale.sh" ]; then echo "🌍 Tailscale: ON αλλά όχι συνδεδεμένο → airsense tailscale"
-    else echo "🌍 Tailscale: OFF (μόνο τοπικά)"; fi
+    elif [ -f "$UH/tailscale.sh" ]; then echo "🌍 Tailscale: ON but not logged in → airsense tailscale"
+    else echo "🌍 Tailscale: OFF (local only)"; fi
     free -m | awk '/Mem:/{printf "💾 RAM: %d/%d MB · ", $3, $2} /Swap:/{printf "swap %d/%d MB\n", $3, $2}'
     app --status 2>/dev/null | tail -n +2 ;;
   qr)       command -v qrencode >/dev/null || sudo apt-get install -y -qq qrencode
@@ -20,15 +20,15 @@ case "${1:-status}" in
             if tailscale ip -4 >/dev/null 2>&1; then T="http://$(tailscale ip -4 | head -1):8765"; echo "🌍 $T"; qrencode -t ANSIUTF8 "$T"; fi ;;
   logs)     sudo journalctl -u airsense-boot -n 80 --no-pager; echo; sudo tail -n 30 $DATA/boot.log ;;
   live)     sudo journalctl -u airsense-boot -f ;;
-  restart)  sudo systemctl restart airsense-boot && echo "✔ Επανεκκίνηση server" ;;
-  stop)     sudo systemctl stop airsense-boot && echo "■ Σταμάτησε (ξεκινά ξανά στο reboot)" ;;
-  update)   echo "🔄 Έλεγχος για νέα έκδοση στο GitHub…"; sudo /usr/local/sbin/airsense-update --force ;;
+  restart)  sudo systemctl restart airsense-boot && echo "✔ Server restarted" ;;
+  stop)     sudo systemctl stop airsense-boot && echo "■ Stopped (starts again on reboot)" ;;
+  update)   echo "🔄 Checking GitHub for a new version…"; sudo /usr/local/sbin/airsense-update --force ;;
   autoupdate)
     case "${2:-}" in
       on)  sudo rm -f $DATA/autoupdate.off; sudo systemctl enable --now airsense-update.timer >/dev/null 2>&1
-           echo "✔ Αυτόματη ενημέρωση ON (κάθε 6 ώρες)" ;;
-      off) sudo touch $DATA/autoupdate.off; echo "✔ Αυτόματη ενημέρωση OFF (ενημέρωση με το χέρι: airsense update)" ;;
-      *)   [ -f $DATA/autoupdate.off ] && echo "Αυτόματη ενημέρωση: OFF" || echo "Αυτόματη ενημέρωση: ON"
+           echo "✔ Auto-update ON (every 6 hours)" ;;
+      off) sudo touch $DATA/autoupdate.off; echo "✔ Auto-update OFF (manual update: airsense update)" ;;
+      *)   [ -f $DATA/autoupdate.off ] && echo "Auto-update: OFF" || echo "Auto-update: ON"
            systemctl list-timers airsense-update.timer --no-pager 2>/dev/null | head -2; sudo tail -n 5 $DATA/update.log 2>/dev/null ;;
     esac ;;
   set-admin) app --set-admin ;;
@@ -37,27 +37,27 @@ case "${1:-status}" in
   city)     shift; app --locate "$*" ;;
   tailscale)
     case "${2:-}" in
-      on)  cp -f /usr/local/share/airsense/tailscale.sh "$UH/tailscale.sh" 2>/dev/null || { echo "✖ λείπει το πρότυπο tailscale.sh"; exit 1; }
-           sudo chown "$(stat -c %U "$UH")": "$UH/tailscale.sh"; echo "✔ Tailscale ON (υπάρχει το $UH/tailscale.sh)"; sudo bash "$UH/tailscale.sh" ;;
+      on)  cp -f /usr/local/share/airsense/tailscale.sh "$UH/tailscale.sh" 2>/dev/null || { echo "✖ tailscale.sh template is missing"; exit 1; }
+           sudo chown "$(stat -c %U "$UH")": "$UH/tailscale.sh"; echo "✔ Tailscale ON ($UH/tailscale.sh exists)"; sudo bash "$UH/tailscale.sh" ;;
       off) [ -f "$UH/tailscale.sh" ] && mv -f "$UH/tailscale.sh" "$UH/tailscale.sh.off"
            sudo tailscale down 2>/dev/null; sudo systemctl disable --now tailscaled 2>/dev/null
-           echo "✔ Tailscale OFF — μόνο τοπικά (το αρχείο έγινε tailscale.sh.off)" ;;
+           echo "✔ Tailscale OFF — local only (file renamed to tailscale.sh.off)" ;;
       *)   if [ -f "$UH/tailscale.sh" ]; then sudo bash "$UH/tailscale.sh"; else echo "Tailscale OFF → airsense tailscale on"; fi ;;
     esac ;;
   uninstall) sudo systemctl disable --now airsense-boot airsense-update.timer; sudo rm -f /etc/systemd/system/airsense-boot.service /etc/systemd/system/airsense-update.* /usr/local/sbin/airsense-boot /usr/local/sbin/airsense-update
-             sudo rm -rf /opt/airsense; echo "✔ Αφαιρέθηκε (τα δεδομένα μένουν στο $DATA)"; sudo rm -f /usr/local/bin/airsense ;;
+             sudo rm -rf /opt/airsense; echo "✔ Removed (data is kept in $DATA)"; sudo rm -f /usr/local/bin/airsense ;;
   *) cat <<EOF
-airsense               κατάσταση + διευθύνσεις
-airsense qr            QR για το κινητό
-airsense logs | live   μηνύματα / ζωντανά
-airsense restart       επανεκκίνηση server
-airsense update        έλεγχος + ενημέρωση από το GitHub τώρα
-airsense autoupdate [on|off]  αυτόματη ενημέρωση (κάθε 6 ώρες)
-airsense set-admin     κωδικός διαχειριστή
-airsense set-pin 1234  PIN για τη web σελίδα (κενό = χωρίς)
-airsense add 192.168.1.241   προσθήκη αισθητήρα
-airsense city Πτολεμαΐδα     τοποθεσία για τον καιρό
-airsense tailscale [on|off]  Tailscale (σύνδεση / ON / OFF)
+airsense                     status + addresses
+airsense qr                  QR codes for the phone
+airsense logs | live         messages / live log
+airsense restart             restart the server
+airsense update              check GitHub + update now
+airsense autoupdate [on|off] automatic updates (every 6 hours)
+airsense set-admin           admin password
+airsense set-pin 1234        PIN for the web page (empty = none)
+airsense add 192.168.1.241   add a sensor
+airsense city Ptolemaida     location for the weather
+airsense tailscale [on|off]  Tailscale (login / ON / OFF)
 airsense uninstall
 EOF
   ;;

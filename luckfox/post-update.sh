@@ -1,10 +1,10 @@
 #!/bin/bash
-# AirSense (Luckfox) — υπηρεσίες συστήματος. Τρέχει από το setup και μετά από κάθε αυτόματη ενημέρωση.
+# AirSense (Luckfox) — system services. Runs from the installer and after every automatic update.
 mount -o remount,size=32M /run 2>/dev/null
 
 cat > /etc/systemd/system/airsense-run-size.service <<'EOF'
 [Unit]
-Description=AirSense — μεγαλύτερο /run (λίγη RAM)
+Description=AirSense — larger /run (low RAM)
 DefaultDependencies=no
 After=local-fs.target
 Before=sysinit.target
@@ -19,7 +19,7 @@ EOF
 
 cat > /etc/systemd/system/airsense-boot.service <<'EOF'
 [Unit]
-Description=AirSense server (BleBox humiditySensor) — αυτόματη εκκίνηση
+Description=AirSense server (BleBox humiditySensor) — autostart
 Wants=network-online.target time-sync.target
 After=network-online.target time-sync.target
 
@@ -38,7 +38,7 @@ EOF
 
 cat > /etc/systemd/system/airsense-update.service <<'EOF'
 [Unit]
-Description=AirSense — έλεγχος για νέα έκδοση στο GitHub
+Description=AirSense — check GitHub for a new version
 Wants=network-online.target
 After=network-online.target airsense-boot.service
 
@@ -50,7 +50,7 @@ EOF
 
 cat > /etc/systemd/system/airsense-update.timer <<'EOF'
 [Unit]
-Description=AirSense — αυτόματη ενημέρωση (10' μετά το boot και κάθε 6 ώρες)
+Description=AirSense — auto-update (10 min after boot and every 6 hours)
 
 [Timer]
 OnBootSec=10min

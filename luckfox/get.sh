@@ -1,6 +1,6 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════════════════════
-#  AirSense — εγκατάσταση/ενημέρωση σε Luckfox Pico με ΜΙΑ εντολή (πάντα η τελευταία έκδοση)
+#  AirSense — install/update on Luckfox Pico with ONE command (always the latest version)
 #
 #    wget -qO get.sh https://raw.githubusercontent.com/nikkpap/AirSense/main/luckfox/get.sh && sudo bash get.sh
 #
@@ -12,10 +12,10 @@ mount -o remount,size=32M /run 2>/dev/null || true
 U=${SUDO_USER:-pico}
 H=$(getent passwd "$U" | cut -d: -f6); H=${H:-/root}
 cd "$H"
-echo "… εργαλεία (wget, unzip)"
+echo "… tools (wget, unzip)"
 command -v wget >/dev/null && command -v unzip >/dev/null || {
   apt-get -o DPkg::Lock::Timeout=600 update -qq && DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=600 install -y -qq wget unzip >/dev/null; }
-echo "… κατέβασμα τελευταίας έκδοσης AirSense"
+echo "… downloading the latest AirSense"
 rm -rf AirSense-Luckfox AirSense-Luckfox.zip
 wget -q --show-progress -O AirSense-Luckfox.zip \
   https://github.com/nikkpap/AirSense/releases/latest/download/AirSense-Luckfox.zip

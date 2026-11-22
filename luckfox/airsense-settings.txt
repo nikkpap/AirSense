@@ -1,26 +1,26 @@
 # ═══════════════════════════════════════════════════════════════
-#  AirSense — ρυθμίσεις (προαιρετικό)
-#  Βάλ' το δίπλα στο AirSense_vX.pyw (π.χ. /home/pico ή στικάκι USB).
-#  Εφαρμόζεται στο επόμενο boot — μόνο όταν αλλάξει το αρχείο.
-#  Άφησε κενό ό,τι δεν θέλεις να αλλάξει.
+#  AirSense — settings (optional)
+#  Put it next to AirSense_vX.pyw (e.g. /home/pico or a USB stick).
+#  Applied on the next boot — only when this file changes.
+#  Leave empty whatever you do not want to change.
 # ═══════════════════════════════════════════════════════════════
 
-# Κωδικός διαχειριστή (για ρυθμίσεις από web / κινητό), 4+ χαρακτήρες
+# Admin password (for settings from the web page / phone), 4+ characters
 ADMIN_PASSWORD=
 
-# PIN για να ανοίγει η web σελίδα (κενό = χωρίς PIN)
+# PIN to open the web page (empty = no PIN)
 PIN=
 
-# IP αισθητήρων BleBox (χωρισμένες με κόμμα) — αν δεν μπουν, τους βρίσκει η σάρωση
+# IPs of BleBox sensors (comma separated) — if empty, the network scan finds them
 SENSORS=192.168.1.241
 
-# Πόλη για τον καιρό (Open-Meteo)
-CITY=Πτολεμαΐδα
+# City for the weather (Open-Meteo)
+CITY=Ptolemaida
 
-# Όνομα συσκευής στο δίκτυο (→ http://ΟΝΟΜΑ.local:8765)
+# Device name on the network (→ http://NAME.local:8765)
 HOSTNAME=airsense
 
-# Αυτόματη ενημέρωση από το GitHub (on/off) — κάθε 6 ώρες
+# Automatic update from GitHub (on/off) — every 6 hours
 AUTO_UPDATE=on
 
-# Tailscale: ΔΕΝ ρυθμίζεται εδώ. Υπάρχει το αρχείο tailscale.sh → ON · δεν υπάρχει → μόνο τοπικά.
+# Tailscale is NOT set here: tailscale.sh exists → ON · missing → local only.
