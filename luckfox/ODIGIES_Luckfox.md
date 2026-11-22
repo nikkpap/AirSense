@@ -20,7 +20,9 @@
 ---
 
 ## Βήμα 1 — Γράψιμο Ubuntu στην κάρτα (μία φορά, ή όποτε θέλεις «reset»)
-1. Κατέβασε από το wiki της Luckfox (Luckfox Pico Pro/Max → Flash image) την εικόνα
+1. Κατέβασε από το wiki της Luckfox — σελίδες RV1106 (εκεί ανήκει η Pico Pro/Max):
+   [Image Overview and Download](https://wiki.luckfox.com/Luckfox-Pico-RV1106/Getting-Started/overview) ·
+   [Image Flashing](https://wiki.luckfox.com/Luckfox-Pico-RV1106/Getting-Started/Image-flashing) — την εικόνα
    **Ubuntu_Luckfox_Pico_Pro_MicroSD** (για Max: **Ubuntu_Luckfox_Pico_Max_MicroSD**) και το **SocToolKit**.
 2. Βάλε την κάρτα στον υπολογιστή, φορμάρισέ τη με το **SD Card Formatter**.
 3. Άνοιξε το **SocToolKit** → διάλεξε **RV1106** → **SD Card Tool** → διάλεξε την κάρτα →
