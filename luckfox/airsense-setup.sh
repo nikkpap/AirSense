@@ -91,8 +91,8 @@ else
   echo "   Χρειάζονται:$NEED  (σε αυτή την πλακέτα παίρνει 5–15 λεπτά — μην το κλείσεις)"
   pgrep -x apt-get >/dev/null || pgrep -x dpkg >/dev/null && echo "   … περιμένω να τελειώσει άλλη εγκατάσταση (apt/dpkg)"
   dpkg --configure -a >/dev/null 2>&1 || true
-  timeout 1200 $APT update 2>&1 | grep -E "^(Get|Hit|Err|E:)" | sed 's/^/   /' || warn "apt update απέτυχε"
-  timeout 1800 $APT install --no-install-recommends $NEED 2>&1 | grep -E "^(Get:|Setting up|Unpacking|E:)" | sed 's/^/   /' \
+  timeout 1200 $APT update 2>&1 | grep --line-buffered -E "^(Get|Hit|Err|E:)" | sed 's/^/   /' || warn "apt update απέτυχε"
+  timeout 1800 $APT install --no-install-recommends $NEED 2>&1 | grep --line-buffered -E "^(Get:|Setting up|Unpacking|E:)" | sed 's/^/   /' \
     || warn "Κάποια πακέτα δεν μπήκαν — θα ξαναδοκιμάσει στο boot"
 fi
 python3 -c "import reportlab" 2>/dev/null && ok "python3 $(python3 -V | cut -d' ' -f2) + reportlab" || warn "χωρίς reportlab (τα PDF θα δοκιμάσουν αργότερα)"
