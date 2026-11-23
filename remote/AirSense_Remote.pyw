@@ -14,7 +14,7 @@ Double-click: installs what it needs (PyQt6, paramiko, qrcode) by itself.
 Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM
 """
 APP_NAME = "AirSense Remote"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.0.1"
 
 import os
 import sys
@@ -1077,6 +1077,9 @@ class Main(QMainWindow):
         self.run_cmd(cmd)
 
     def run_cmd(self, cmd):
+        if not (self.conn and self.conn.alive):
+            self._term_sys("Not connected — 🔌 Connect first", err=True)
+            return
         if self.chan is not None:
             self._term_sys("A command is still running — ■ Stop first", err=True)
             return
