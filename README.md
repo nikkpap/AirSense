@@ -1,5 +1,165 @@
 # 🌬 AirSense
 
+**[English](#-english) · [Ελληνικά](#-ελληνικά)**
+
+**Developer:** Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM
+
+---
+
+# 🇬🇧 English
+
+Monitoring, logging and alerts for **BleBox humiditySensor** sensors: charts, Open-Meteo weather,
+inside–outside difference with ventilation advice, **PDF reports**, CSV/XML, email, and access from your phone
+(on the local network or from anywhere with Tailscale). *(formerly ALU HygroLink)*
+
+## 📌 How it works
+```
+ BleBox sensors ──WiFi──►  AirSense server  ──►  web page :8765  ──►  phone (Android app / browser)
+                           (Windows PC, or                            local  or  from anywhere (Tailscale)
+                            Raspberry Pi / Luckfox 24/7)
+```
+The **server** reads the sensors, keeps the history, makes PDF/CSV reports and sends emails.
+It can be your PC (`AirSense_vX.pyw`) **or** a small board that stays on 24/7.
+
+## ⬇ Download — [Releases](https://github.com/nikkpap/AirSense/releases/latest)
+| File | For | How |
+|---|---|---|
+| `AirSense_vX.pyw` | Windows | Double-click — installs everything it needs by itself (Python 3.9–3.14, 64-bit) and opens the Wizard. |
+| `AirSense-Pi_vX.zip` | **Raspberry Pi** Zero 2 W / 3 / 4 / 5 | One command (below) · [pi/ODIGIES_Raspberry_Pi.md](pi/ODIGIES_Raspberry_Pi.md) |
+| `AirSense-Luckfox_vX.zip` | **Luckfox Pico** Pro / Max (Ubuntu) | One command (below) · [luckfox/ODIGIES_Luckfox.md](luckfox/ODIGIES_Luckfox.md) |
+| `AirSense-Android_vX.apk` | Android 8+ | Signed APK — install it, then scan the server's QR code. |
+
+## ✨ Features
+- **Live dashboard** for every sensor: temperature, humidity, dew point, absolute humidity — inside / outside with the **difference** and **ventilation advice**.
+- **Configurable labels** (Inside / Outside / Basement … whatever you like) — from the Settings.
+- **History & charts** (SQLite): 6 hours / 24 hours / 7 days / 30 days.
+- **Weather** from Open-Meteo (city or automatic from the IP).
+- **Export:** PDF report with a clean design · CSV · XML.
+- **Email** reports and alarms (thresholds), with the PDF attached.
+- **Themes:** Auto / Dark / Light.
+- **Web page + Android app** — PIN for the web page, admin password for the settings, QR to connect the phone.
+- **Remote access** with Tailscale (no open router ports).
+
+---
+
+## 🚀 Quick start
+
+### Windows
+1. Download `AirSense_vX.pyw` → **double-click**.
+2. The Wizard finds the sensors on your network by itself → **Finish**.
+3. For the phone: Settings → QR → scan it with the Android app.
+
+### Raspberry Pi or Luckfox (24/7 server) — ONE command
+Log in to the board with **ssh** and type:
+```bash
+wget -qO get.sh https://raw.githubusercontent.com/nikkpap/AirSense/main/get.sh && sudo bash get.sh
+```
+It detects the board **by itself** (Raspberry Pi / Luckfox), downloads the right package and:
+
+| Step | What happens |
+|---|---|
+| **1/6** | System check + **all questions at the start** (time zone from a list, name `airsense`, fixed MAC, Tailscale, WiFi) — then it runs by itself |
+| **2/6** | **Clock**: time zone + NTP from [ntppool.org](https://www.ntppool.org/zone/europe) (Europe: `europe.pool.ntp.org`) — synced **before** apt · swap |
+| **3/6** | Packages (python3, reportlab for PDF, fonts, avahi for `airsense.local`, qrencode) |
+| **4/6** | AirSense + autostart on boot + automatic updates from GitHub (+ WiFi tool on the Pi) |
+| **5/6** | Network name, fixed address, start the server |
+| **6/6** | Tailscale (access from anywhere) + Tailscale SSH |
+| End | Address + **QR code** for the phone → "Reboot now?" → **Y** |
+
+Every task shows a moving progress bar with a timer: moving = working, not stuck.
+After the reboot, on the **first ssh login**, it asks you to **change the factory password** (e.g. `luckfox`, `raspberry`) if it was not changed yet.
+Run the same command any time to **reinstall / update** — your data is kept.
+
+#### Raspberry Pi — prepare the SD card
+Raspberry Pi Imager → **Raspberry Pi OS Lite (64-bit)** → *Edit settings*: hostname `airsense`, user + your own password,
+your WiFi (country GR), *Services → Enable SSH* → write → card in the Pi → `ssh pi@airsense.local`.
+
+#### Luckfox Pico — prepare the SD card
+Ubuntu image from the [Luckfox wiki](https://wiki.luckfox.com/Luckfox-Pico-RV1106/Getting-Started/overview) → SocToolKit (SD card, FAT32) →
+Ethernet cable to the router → `ssh pico@IP` (password `luckfox`). Details: [luckfox/ODIGIES_Luckfox.md](luckfox/ODIGIES_Luckfox.md).
+
+### Android
+Install the APK → "Add server" → scan the QR code (`airsense qr` on the board, or Settings on the PC).
+
+---
+
+## 🧰 Commands on the board (ssh)
+| Command | What it does |
+|---|---|
+| `airsense` / `airsense status` | **full diagnosis** with ✔/⚠/✖: server, sensors, network, WiFi, clock/NTP, Tailscale, updates, password, RAM/SD card |
+| `airsense qr` | QR codes for the phone (local + Tailscale) |
+| `airsense logs` / `airsense live` | messages / live log |
+| `airsense restart` / `stop` | restart / stop the server |
+| `airsense update` | check GitHub + update **now** |
+| `airsense autoupdate on\|off` | automatic updates (every 6 hours) |
+| `airsense password` | change the user password (and root's, if it is the factory default) |
+| `airsense clock [Europe/Athens]` | clock, time zone, NTP sync |
+| `airsense wifi` | (Raspberry Pi) WiFi: scan, add a network, saved networks |
+| `airsense mac` | MAC address — for an IP reservation in the router |
+| `airsense set-admin` / `set-pin 1234` | admin password / PIN of the web page |
+| `airsense add 192.168.1.241` | add a sensor |
+| `airsense city Ptolemaida` | weather location |
+| `airsense tailscale [on\|off]` | Tailscale login / ON / OFF |
+| `airsense uninstall` | remove (the data stays in `/var/lib/airsense`) |
+
+## 🌍 Tailscale — access from anywhere
+- **ON** = the file `~/tailscale.sh` exists · **OFF** (local only) = it does not. (`airsense tailscale on/off`)
+- Login: open the link / QR code it shows → Google / Microsoft / Apple account. Or `AUTHKEY="tskey-auth-…"` inside `tailscale.sh`.
+- On the phone: the **Tailscale** app with the **same account** → `http://100.x.x.x:8765`.
+- **Tailscale SSH** is turned on automatically: `ssh USER@airsense` from any of your Tailscale devices.
+- In the [admin console](https://login.tailscale.com/admin/machines): machine **airsense** → ⋯ → **Disable key expiry** (so it never asks to log in again).
+
+## 📶 WiFi (Raspberry Pi)
+- `airsense wifi` — menu: scan, add, saved networks, priority, hidden network.
+- **Without ssh:** put the SD card in a PC → on the boot partition copy `airsense-wifi.example.txt` as **`airsense-wifi.txt`** →
+  write `ssid` / `password` → card back in the Pi → power on. The Pi keeps all networks and joins whichever it finds.
+
+## ⚙ airsense-settings.txt (optional)
+In the user's home folder (or on the SD card boot partition / a USB stick). Applied on the next boot, only when it changes:
+`ADMIN_PASSWORD` · `PIN` · `SENSORS` · `CITY` · `TIMEZONE` · `HOSTNAME` · `AUTO_UPDATE=on/off` · `TAILSCALE_SSH=on/off`.
+
+## 🔄 Automatic updates
+10 minutes after every boot and every 6 hours the board checks GitHub; a newer release is downloaded, checked and installed
+(data and settings are kept). Turn off: `airsense autoupdate off` or `AUTO_UPDATE=off`. Log: `/var/lib/airsense/update.log`.
+
+## 🩺 Troubleshooting
+| I see | I do |
+|---|---|
+| Anything | `airsense` → it shows what is wrong and the command that fixes it |
+| The page does not open | `airsense logs` · `airsense restart` |
+| The IP changed | `http://airsense.local:8765` or an IP reservation in the router (`airsense mac`) |
+| Wrong time | `airsense clock` (or `airsense clock Europe/Athens`) |
+| Tailscale "needs login" | `airsense tailscale` → link + QR |
+| The install looks stuck | A moving bar = working. Ctrl+C and run the same command again — it continues. Log: `/tmp/airsense-setup.log` |
+| Android update does not install | Uninstall the old **-debug** app once; signed APKs then update over each other |
+
+---
+
+## 📁 Folders
+- `desktop/` — the PC app (PyQt6), which is also the server for the web page / phone.
+- `linux/` — **shared** scripts for Raspberry Pi + Luckfox (setup, boot, update, tailscale, `airsense` command, password, clock).
+- `pi/` — WiFi tool, `.bat` and Raspberry Pi guide.
+- `luckfox/` — `.bat` and Luckfox Pico guide.
+- `android/` — the Android app (Kotlin, Jetpack Compose) — opens in Android Studio. `android/signing/` — one-click signing key setup.
+- `get.sh` — the one-command installer (same as `linux/get.sh`, `pi/get.sh`, `luckfox/get.sh`).
+
+## 🛠 Build & Release (GitHub Actions)
+- Every push to `main` → checks + build (files in the run's *Artifacts*).
+- New release: bump the version (`APP_VERSION` in `desktop/AirSense.pyw`, `versionName/versionCode` in
+  `android/app/build.gradle.kts`), add a `CHANGELOG.md` entry, then Actions → Build & Release → *Run workflow* → ✔ release.
+- **APK signing:** the 4 secrets `AIRSENSE_KEYSTORE_B64`, `AIRSENSE_KEYSTORE_PASSWORD`, `AIRSENSE_KEY_ALIAS`, `AIRSENSE_KEY_PASSWORD`
+  (*Settings → Secrets and variables → Actions*). With them the APK is signed and the `-debug` APK is removed from the release.
+  Keep `airsense.jks` and its password safe — without them you cannot publish updates of the same app.
+
+## License / sources
+BleBox API · Weather: [Open-Meteo.com](https://open-meteo.com) (CC BY 4.0) · Time: [NTP Pool](https://www.ntppool.org) ·
+Remote access: [Tailscale](https://tailscale.com)
+
+---
+---
+
+# 🇬🇷 Ελληνικά
+
 Παρακολούθηση, καταγραφή και ειδοποιήσεις για αισθητήρες **BleBox humiditySensor**: γραφήματα, καιρός Open-Meteo,
 διαφορά μέσα–έξω με συμβουλή αερισμού, **αναφορές PDF**, CSV/XML, email, και πρόσβαση από το κινητό
 (τοπικά ή από παντού με Tailscale). *(πρώην ALU HygroLink)*
@@ -23,7 +183,7 @@
 | `AirSense_vX.pyw` | Windows | Διπλό κλικ — εγκαθιστά μόνο του ό,τι χρειάζεται (Python 3.9–3.14, 64-bit) και ανοίγει τον Οδηγό. |
 | `AirSense-Pi_vX.zip` | **Raspberry Pi** Zero 2 W / 3 / 4 / 5 | Μία εντολή (παρακάτω) · [pi/ODIGIES_Raspberry_Pi.md](pi/ODIGIES_Raspberry_Pi.md) |
 | `AirSense-Luckfox_vX.zip` | **Luckfox Pico** Pro / Max (Ubuntu) | Μία εντολή (παρακάτω) · [luckfox/ODIGIES_Luckfox.md](luckfox/ODIGIES_Luckfox.md) |
-| `AirSense-Android_vX(-debug).apk` | Android 8+ | Εγκατάσταση APK → σκανάρεις το QR του server. |
+| `AirSense-Android_vX.apk` | Android 8+ | Υπογεγραμμένο APK → εγκατάσταση → σκανάρεις το QR του server. |
 
 ---
 
