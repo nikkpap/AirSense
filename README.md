@@ -149,7 +149,7 @@ Raspberry Pi Zero 2 W: SSH over USB needs extra setup (USB gadget) — use `airs
 - **Tailscale SSH** is turned on automatically: `ssh USER@airsense` from any of your Tailscale devices.
 - In the [admin console](https://login.tailscale.com/admin/machines): machine **airsense** → ⋯ → **Disable key expiry** (so it never asks to log in again).
 
-## 👥 Access for another person (e.g. a colleague in Athens with an Android phone)
+## 👥 Access for another person (e.g. a colleague in Athens with an Android phone) — Luckfox & Raspberry Pi
 You share **only the airsense machine** through Tailscale — no router ports, and they see nothing else of your network.
 They log in with **their own** Tailscale account (free); they never learn your passwords.
 
@@ -176,6 +176,11 @@ Rough estimate (not measured) on a Luckfox Pico Pro (128MB): viewing values / ch
 2–3 at the same moment just take a few seconds longer. Tailscale on the Luckfox runs in userspace mode (a bit slower, not noticeable for pages).
 Sharing has no practical limit on the free plan. If it feels slow, `airsense status` shows RAM/swap; a swap that is always full means
 the board is too small → a **Luckfox Pico Max** (256MB) or **Raspberry Pi Zero 2 W** (512MB) runs the same setup with the same command.
+
+**Raspberry Pi Zero 2 W** (512MB, 4 cores): the sharing steps are exactly the same (machine **airsense** → Share).
+Rough estimate (not measured): viewing — easily **30–50 people** at once; PDF reports about 2–3× faster than on the Luckfox and several at once without trouble;
+Tailscale runs in normal (kernel/TUN) mode — faster than the Luckfox userspace mode. On WiFi the signal matters more than the board:
+`airsense status` shows the WiFi signal % — keep it above ~50%.
 
 **"Failed to accept invitation"** — usually one of these:
 1. Opened inside **Viber / Messenger / WhatsApp** (their small built-in browser breaks the login) → long-press the link → **Copy** → paste in **Chrome**.
@@ -361,7 +366,7 @@ Raspberry Pi Zero 2 W: το SSH μέσω USB θέλει ειδική ρύθμι�
 - **Tailscale SSH** ανοίγει αυτόματα: `ssh ΧΡΗΣΤΗΣ@airsense` από κάθε συσκευή σου στο Tailscale.
 - Στο [admin](https://login.tailscale.com/admin/machines): μηχάνημα **airsense** → ⋯ → **Disable key expiry** (να μη ζητά ξανά login κάθε 6 μήνες).
 
-## 👥 Πρόσβαση για άλλον (π.χ. συνάδελφος στην Αθήνα με Android)
+## 👥 Πρόσβαση για άλλον (π.χ. συνάδελφος στην Αθήνα με Android) — Luckfox & Raspberry Pi
 Μοιράζεσαι **μόνο το μηχάνημα airsense** μέσω Tailscale — χωρίς πόρτες στο router, και δεν βλέπει τίποτε άλλο από το δίκτυό σου.
 Μπαίνει με τον **δικό του** λογαριασμό Tailscale (δωρεάν)· τους δικούς σου κωδικούς δεν τους μαθαίνει ποτέ.
 
@@ -388,6 +393,11 @@ Raspberry Pi Zero 2 W: το SSH μέσω USB θέλει ειδική ρύθμι�
 2–3 μαζί απλά αργούν λίγα δευτερόλεπτα παραπάνω. Το Tailscale στο Luckfox τρέχει σε userspace mode (λίγο πιο αργό, δεν φαίνεται στις σελίδες).
 Η κοινοποίηση δεν έχει πρακτικό όριο στο δωρεάν πλάνο. Αν το νιώσεις αργό, το `airsense status` δείχνει RAM/swap· αν η swap γεμίζει
 συνέχεια, η πλακέτα δεν φτάνει → ένα **Luckfox Pico Max** (256MB) ή **Raspberry Pi Zero 2 W** (512MB) τρέχει το ίδιο setup με την ίδια εντολή.
+
+**Raspberry Pi Zero 2 W** (512MB, 4 πυρήνες): τα βήματα κοινοποίησης είναι ακριβώς ίδια (μηχάνημα **airsense** → Share).
+Εκτίμηση (δεν έχει μετρηθεί): προβολή — άνετα **30–50 άτομα** μαζί· τα PDF βγαίνουν περίπου 2–3× πιο γρήγορα από το Luckfox, και πολλά μαζί χωρίς πρόβλημα·
+το Tailscale τρέχει κανονικά (kernel/TUN) — πιο γρήγορο από το userspace του Luckfox. Στο WiFi μετράει περισσότερο το σήμα παρά η πλακέτα:
+το `airsense status` δείχνει το σήμα WiFi % — κράτα το πάνω από ~50%.
 
 **«Failed to accept invitation»** — συνήθως ένα από αυτά:
 1. Τον άνοιξε μέσα από **Viber / Messenger / WhatsApp** (ο μικρός browser τους χαλάει το login) → πατημένο στον σύνδεσμο → **Αντιγραφή** → επικόλληση στο **Chrome**.
