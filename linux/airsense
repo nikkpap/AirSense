@@ -129,7 +129,9 @@ case "${1:-status}" in
   clock|time)
             if [ -n "${2:-}" ]; then
               [ -f "/usr/share/zoneinfo/$2" ] || { echo "✖ unknown time zone: $2 (list: timedatectl list-timezones)"; exit 1; }
-              sudo timedatectl set-timezone "$2" && echo "✔ Time zone $2 (UTC$(TZ=$2 date +%:z))"
+              # timedatectl is blocked on some images (Luckfox: "Access denied") → write it directly
+              sudo timedatectl set-timezone "$2" 2>/dev/null || { sudo ln -sf "/usr/share/zoneinfo/$2" /etc/localtime && echo "$2" | sudo tee /etc/timezone >/dev/null; }
+              [ "$(readlink -f /etc/localtime)" = "$(readlink -f "/usr/share/zoneinfo/$2")" ] && echo "✔ Time zone $2 (UTC$(TZ=$2 date +%:z))" || echo "✖ time zone not set"
             fi
             sudo systemctl restart systemd-timesyncd 2>/dev/null
             timedatectl status 2>/dev/null | sed 's/^ *//' | grep -E 'Local time|Time zone|synchronized|NTP service'

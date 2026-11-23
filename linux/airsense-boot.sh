@@ -113,7 +113,8 @@ if [ -f "$DATA/settings.applied" ] && ! cmp -s "$DATA/settings.applied" "$DATA/s
   [ -n "$C" ] && run --locate "$C"
   TZN=$(get TIMEZONE)
   if [ -n "$TZN" ] && [ -f "/usr/share/zoneinfo/$TZN" ] && [ "$TZN" != "$(timedatectl show -p Timezone --value 2>/dev/null)" ]; then
-    timedatectl set-timezone "$TZN" && echo "   time zone: $TZN (UTC$(TZ=$TZN date +%:z))"
+    timedatectl set-timezone "$TZN" 2>/dev/null || { ln -sf "/usr/share/zoneinfo/$TZN" /etc/localtime; echo "$TZN" > /etc/timezone; }
+    echo "   time zone: $TZN (UTC$(TZ=$TZN date +%:z))"
   fi
   if [ -n "$H" ] && [ "$H" != "$(hostname)" ]; then
     O=$(hostname); echo "$H" > /etc/hostname

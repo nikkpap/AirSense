@@ -1,5 +1,9 @@
 # Αλλαγές — AirSense
 
+## v1.6.17
+- Ζώνη ώρας: όπου το `timedatectl set-timezone` μπλοκάρεται («Access denied», εικόνα Ubuntu του Luckfox) γράφεται απευθείας
+  (`/etc/localtime`, `/etc/timezone`) — στο setup, στο boot (`TIMEZONE=`) και στο `airsense clock Ζώνη`.
+
 ## v1.6.16
 - **`airsense scan`** (Raspberry Pi / Luckfox): σαρώνει το δίκτυο, βρίσκει **μόνο αισθητήρες BleBox** και τους προσθέτει
   (όσους υπάρχουν ήδη τους ενημερώνει αν άλλαξε η IP· άλλες συσκευές BleBox παραλείπονται). Άλλο δίκτυο: `airsense scan 10.0.0.0/24`.

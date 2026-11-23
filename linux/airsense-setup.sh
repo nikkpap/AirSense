@@ -225,7 +225,11 @@ ok "Answers saved — you can leave it running now"
 
 # ── 2. Clock + swap ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 step 2 "Clock (time zone + NTP) and swap"
-progress "Time zone $TZ_SEL (UTC$(TZ=$TZ_SEL date +%:z))" timedatectl set-timezone "$TZ_SEL" || warn "Time zone not set"
+set_tz() {   # timedatectl is blocked on some images (Luckfox: "Access denied") → write it directly
+  timedatectl set-timezone "$1" 2>/dev/null || { ln -sf "/usr/share/zoneinfo/$1" /etc/localtime && echo "$1" > /etc/timezone; }
+  [ "$(readlink -f /etc/localtime)" = "$(readlink -f "/usr/share/zoneinfo/$1")" ]
+}
+progress "Time zone $TZ_SEL (UTC$(TZ=$TZ_SEL date +%:z))" set_tz "$TZ_SEL" || warn "Time zone not set"
 if ! dpkg -s systemd-timesyncd >/dev/null 2>&1 && [ ! -x /lib/systemd/systemd-timesyncd ]; then
   progress "Installing systemd-timesyncd" timeout 900 $APT install --no-install-recommends systemd-timesyncd || true
 fi
