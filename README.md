@@ -204,6 +204,8 @@ Raspberry Pi Zero 2 W: SSH over USB needs extra setup (USB gadget) — use `airs
 - In the [admin console](https://login.tailscale.com/admin/machines): machine **airsense** → ⋯ → **Disable key expiry** (so it never asks to log in again).
 
 ## 👥 Access for another person (e.g. a colleague in Athens with an Android phone) — Luckfox & Raspberry Pi
+📄 Ready PDF guide for the other person: [English](docs/AirSense_Phone_Guide_EN_v1.0.0.pdf) · [Ελληνικά](docs/AirSense_Odigos_Kinitou_GR_v1.0.0.pdf) (send it together with your invitation link, address / QR and PIN).
+
 You share **only the airsense machine** through Tailscale — no router ports, and they see nothing else of your network.
 They log in with **their own** Tailscale account (free); they never learn your passwords.
 
@@ -476,6 +478,8 @@ Raspberry Pi Zero 2 W: το SSH μέσω USB θέλει ειδική ρύθμι�
 - Στο [admin](https://login.tailscale.com/admin/machines): μηχάνημα **airsense** → ⋯ → **Disable key expiry** (να μη ζητά ξανά login κάθε 6 μήνες).
 
 ## 👥 Πρόσβαση για άλλον (π.χ. συνάδελφος στην Αθήνα με Android) — Luckfox & Raspberry Pi
+📄 Έτοιμος οδηγός PDF για τον άλλον: [Ελληνικά](docs/AirSense_Odigos_Kinitou_GR_v1.0.0.pdf) · [English](docs/AirSense_Phone_Guide_EN_v1.0.0.pdf) (τον στέλνεις μαζί με το link πρόσκλησης, τη διεύθυνση / QR και το PIN).
+
 Μοιράζεσαι **μόνο το μηχάνημα airsense** μέσω Tailscale — χωρίς πόρτες στο router, και δεν βλέπει τίποτε άλλο από το δίκτυό σου.
 Μπαίνει με τον **δικό του** λογαριασμό Tailscale (δωρεάν)· τους δικούς σου κωδικούς δεν τους μαθαίνει ποτέ.
 
