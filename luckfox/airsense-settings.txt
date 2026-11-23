@@ -23,4 +23,7 @@ HOSTNAME=airsense
 # Automatic update from GitHub (on/off) — every 6 hours
 AUTO_UPDATE=on
 
-# Tailscale is NOT set here: tailscale.sh exists → ON · missing → local only.
+# Tailscale SSH (ssh pico@airsense from your Tailscale devices, no password): on/off
+TAILSCALE_SSH=on
+
+# Tailscale ON/OFF is NOT set here: tailscale.sh exists → ON · missing → local only.

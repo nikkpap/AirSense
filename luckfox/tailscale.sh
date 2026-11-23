@@ -46,6 +46,7 @@ progress() {
   return $rc
 }
 trap 'printf "\033[?25h"' EXIT
+trap 'printf "\r\033[K\033[?25h"' INT     # Ctrl+C stops only the current wait, the script continues
 
 # only one Tailscale setup at a time (boot service + installer could start it together)
 exec 9>/run/airsense-tailscale.lock
@@ -121,22 +122,32 @@ progress "Starting Tailscale" bash -c 'systemctl enable tailscaled; systemctl re
 progress "Waiting for Tailscale" wait_daemon || {
   echo "  ✖ tailscaled does not start:"; systemctl status tailscaled --no-pager 2>&1 | tail -n 6 | sed 's/^/     /'; exit 1; }
 
-if [ "$(ts_state)" = "Running" ]; then
+# Tailscale SSH: log in to this board from any of your Tailscale devices ("ssh pico@NAME"),
+# no password, no open ports. Set TAILSCALE_SSH=off in airsense-settings.txt to keep it off.
+enable_ssh() {
+  if grep -qiE '^[[:space:]]*TAILSCALE_SSH[[:space:]]*=[[:space:]]*(off|no|0)' /var/lib/airsense/settings.applied 2>/dev/null; then
+    tailscale set --ssh=false >/dev/null 2>&1; echo "  ℹ Tailscale SSH: OFF (TAILSCALE_SSH=off)"; return 0
+  fi
+  if tailscale set --ssh >/dev/null 2>&1; then echo "  ✔ Tailscale SSH: ON  →  ssh pico@$(hostname)  (from any device on your Tailscale)"
+  else echo "  ⚠ Tailscale SSH could not be enabled (run: sudo tailscale set --ssh)"; fi
+}
+connected() {
   rm -f "$LOGIN_FILE"
-  T=$(tailscale ip -4 2>/dev/null | head -1)
+  local T; T=$(tailscale ip -4 2>/dev/null | head -1)
   echo "  ✔ Tailscale connected · $T · http://$T:8765"
-  exit 0
-fi
+  enable_ssh
+}
+
+if [ "$(ts_state)" = "Running" ]; then connected; exit 0; fi
 
 if [ -n "$AUTHKEY" ]; then
-  progress "Tailscale login (auth key)" tailscale up --authkey="$AUTHKEY" --hostname="$(hostname)" --accept-dns=false \
-    && echo "  ✔ Tailscale connected · $(tailscale ip -4 2>/dev/null | head -1)"
+  if progress "Tailscale login (auth key)" tailscale up --authkey="$AUTHKEY" --hostname="$(hostname)" --accept-dns=false; then connected; fi
   exit 0
 fi
 
 # Browser login: grab the link and keep it in tailscale-login.txt
 OUT=$(mktemp)
-( timeout 300 tailscale up --hostname="$(hostname)" --accept-dns=false >"$OUT" 2>&1 & )
+( timeout 1200 tailscale up --hostname="$(hostname)" --accept-dns=false >"$OUT" 2>&1 & )
 get_url() {
   for i in $(seq 1 30); do
     grep -q 'https://login\.tailscale\.com/' "$OUT" && return 0
@@ -145,7 +156,15 @@ get_url() {
   done
   return 1
 }
+wait_login() {
+  for i in $(seq 1 300); do
+    [ "$(ts_state)" = Running ] && return 0
+    echo "open the link above and log in … (Ctrl+C = later)"; sleep 2
+  done
+  return 1
+}
 progress "Getting the login link" get_url
+[ "$(ts_state)" = Running ] && { connected; exit 0; }
 URL=$(grep -m1 -oE 'https://login\.tailscale\.com/[^ ]+' "$OUT")
 if [ -n "$URL" ]; then
   echo "$URL" > "$LOGIN_FILE"
@@ -154,6 +173,11 @@ if [ -n "$URL" ]; then
   echo "     $URL"
   if [ -t 1 ] && command -v qrencode >/dev/null; then qrencode -t ANSIUTF8 "$URL"; fi
   echo "     (the link is also saved in $LOGIN_FILE · command: airsense tailscale)"
+  if [ -t 1 ]; then
+    echo
+    if progress "Waiting for your Tailscale login (up to 10 min)" wait_login; then connected
+    else echo "  ℹ Not logged in yet — log in any time; SSH + connection finish by themselves on the next boot (or: airsense tailscale)"; fi
+  fi
 else
-  [ "$(ts_state)" = Running ] && echo "  ✔ Tailscale connected · $(tailscale ip -4 2>/dev/null | head -1)"
+  echo "  ⚠ No login link yet — try again: airsense tailscale"
 fi

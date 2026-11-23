@@ -224,7 +224,9 @@ fi
 if [ -f "$USER_HOME/tailscale.sh" ]; then
   echo -e "  ${D}(the server is already running — Ctrl+C here only stops the Tailscale setup; it retries on every boot)${N}"
   TSK=$(grep -m1 -oP '^AUTHKEY="\K[^"]*' "$USER_HOME/tailscale.sh" 2>/dev/null)
+  trap 'echo' INT        # Ctrl+C during Tailscale = skip it, the installer continues
   AIRSENSE_TS_AUTHKEY="$TSK" timeout 1800 bash /usr/local/share/airsense/tailscale.sh || warn "Tailscale not ready yet — later: airsense tailscale"
+  trap 'printf "\r\033[K\033[?25h"; kill $(jobs -p) 2>/dev/null; echo -e "\n  ${Y}⚠${N} Stopped (Ctrl+C). Run the same command again to continue."; exit 130' INT
 fi
 
 # ── Summary ────────────────────────────────────────────────────────────────

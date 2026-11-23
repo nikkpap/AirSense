@@ -1,5 +1,8 @@
 # Αλλαγές — AirSense
 
+## v1.6.13
+- Luckfox: **Tailscale SSH αυτόματα** μόλις συνδεθεί το Tailscale (`ssh pico@airsense` από κάθε συσκευή σου στο Tailscale, χωρίς κωδικό) — στο setup **περιμένει να κάνεις login** (μπάρα, έως 10') πριν τη μεγάλη επανεκκίνηση, και σε κάθε boot το ξαναεπιβεβαιώνει. `TAILSCALE_SSH=off` στο airsense-settings.txt για να μείνει κλειστό. Ctrl+C στο Tailscale = παράλειψη, το setup συνεχίζει.
+
 ## v1.6.12
 - Luckfox: **`airsense status`** (ή σκέτο `airsense`, `airsense doctor`) — πλήρης διάγνωση σε μία οθόνη με ✔/⚠/✖ και τι να κάνεις: υπηρεσία & web :8765, αισθητήρες, IP/MAC/router/internet/DNS/ώρα, Tailscale (κατάσταση, IP, userspace, on boot), αυτόματη ενημέρωση, RAM/swap/κάρτα/`/run`/θερμοκρασία CPU, βάση, τελευταία μηνύματα.
 
