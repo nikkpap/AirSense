@@ -15,7 +15,7 @@ Developer : Nikolaos K. Paridis (aka nikkpap) — ALU DEV TEAM
 APP_NAME = "AirSense"
 OLD_APP_NAMES = ("ALU HygroLink", "ALU AirSense")   # παλιά ονόματα (μεταφορά δεδομένων/ρυθμίσεων)
 OLD_APP_NAME = OLD_APP_NAMES[0]
-APP_VERSION = "1.6.15"
+APP_VERSION = "1.6.16"
 AUTHOR = "Nikolaos K. Paridis (aka nikkpap)"
 TEAM = "ALU DEV TEAM"
 
@@ -206,7 +206,7 @@ def webbrowser_open(url):
         pass
 
 
-CLI_FLAGS = ("--headless", "--set-admin", "--set-pin", "--status", "--add", "--locate", "--help-cli")
+CLI_FLAGS = ("--headless", "--set-admin", "--set-pin", "--status", "--add", "--scan", "--locate", "--help-cli")
 HEADLESS = any(a in sys.argv for a in CLI_FLAGS) or (
     os.name != "nt" and sys.platform != "darwin" and not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"))
 if not HEADLESS:
@@ -6595,7 +6595,7 @@ def headless_main():
 
 
 def cli_main():
-    """Εντολές γραμμής: --set-admin, --set-pin [PIN], --status, --add IP, --locate ΠΟΛΗ"""
+    """Εντολές γραμμής: --set-admin, --set-pin [PIN], --status, --add IP, --scan [ΔΙΚΤΥΑ], --locate ΠΟΛΗ"""
     import getpass
     a = sys.argv[1:]
     if "--help-cli" in a:
@@ -6605,6 +6605,7 @@ def cli_main():
   --set-pin [PIN]       PIN για web/κινητό (κενό = χωρίς PIN)
   --status              κατάσταση & διευθύνσεις
   --add IP              προσθήκη αισθητήρα με IP
+  --scan [ΔΙΚΤΥΑ]       σάρωση δικτύου: βρίσκει και προσθέτει μόνο αισθητήρες BleBox (π.χ. --scan 10.0.0.0/24)
   --locate "Πόλη"       τοποθεσία καιρού (Open-Meteo)
   --data ΦΑΚΕΛΟΣ        φάκελος δεδομένων""")
         return 0
@@ -6654,6 +6655,52 @@ def cli_main():
         save(cfg)
         print(f"✔ Προστέθηκε: {info.get('deviceName')} [{info.get('type')}]")
         return 0
+    if "--scan" in a:
+        extra = _arg_value("--scan")
+        if extra and extra.startswith("--"):
+            extra = None
+        nets = build_networks(extra or cfg.get("subnets", ""))
+        hosts = list(dict.fromkeys(str(h) for n in nets for h in n.hosts()))
+        print(f"🔍 Σάρωση: {', '.join(str(n) for n in nets) or '—'} ({len(hosts)} διευθύνσεις)…", flush=True)
+        found, done = [], 0
+        with ThreadPoolExecutor(max_workers=48) as ex:
+            for r in ex.map(probe_host, hosts):
+                done += 1
+                if done % 32 == 0 or done == len(hosts):
+                    print(f"\r   {done}/{len(hosts)} · BleBox: {len(found)}", end="", flush=True)
+                if r and r.get("blebox"):
+                    found.append(r)
+        print()
+        added = moved = 0
+        for r in found:
+            sensor = (r.get("type") or "").lower() in SENSOR_TYPES
+            did = str(r.get("id") or r["ip"])
+            ex_d = next((d for d in cfg["devices"] if d["id"] == did), None)
+            mark = "αισθητήρας" if sensor else "άλλη συσκευή BleBox — παραλείπεται"
+            if ex_d:
+                if ex_d["ip"] != r["ip"]:
+                    print(f"  ↻ {r.get('name') or did}  {ex_d['ip']} → {r['ip']}  (νέα IP)")
+                    ex_d["ip"] = r["ip"]
+                    moved += 1
+                else:
+                    print(f"  ✔ {r.get('name') or did}  {r['ip']}  (υπάρχει ήδη)")
+                continue
+            if not sensor:
+                print(f"  · {r.get('name') or did}  {r['ip']}  [{r.get('type')}] — {mark}")
+                continue
+            info = blebox_info(r["ip"], 5) or {}
+            cfg["devices"].append({"id": did, "name": info.get("deviceName") or r.get("name") or r["ip"], "ip": r["ip"],
+                                   "type": info.get("type", r.get("type", "")), "product": info.get("product", ""),
+                                   "fv": info.get("fv", ""), "apiLevel": str(info.get("apiLevel", "")),
+                                   "mac": "", "enabled": True})
+            print(f"  ＋ {info.get('deviceName') or r.get('name') or did}  {r['ip']}  [{r.get('type')}] — προστέθηκε")
+            added += 1
+        if added or moved:
+            save(cfg)
+        sensors = sum(1 for r in found if (r.get("type") or "").lower() in SENSOR_TYPES)
+        print(f"✔ Βρέθηκαν {sensors} αισθητήρες BleBox · νέοι: {added} · νέα IP: {moved}" if found
+              else "✖ Δεν βρέθηκε αισθητήρας BleBox. Είναι στο ίδιο δίκτυο; (άλλο δίκτυο: --scan 10.0.0.0/24)")
+        return 0 if found else 1
     if "--locate" in a:
         name = _arg_value("--locate") or input("Πόλη / χωριό: ")
         res = geocode(name)

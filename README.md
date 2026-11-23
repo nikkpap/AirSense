@@ -105,7 +105,8 @@ By hand: Settings → **Updates** → «🔄 Check for updates». The first time
 | `airsense wifi` | (Raspberry Pi only) WiFi menu: scan, add, saved networks, priority |
 | `airsense set-admin` | admin password (settings from the web page / phone) |
 | `airsense set-pin 1234` | PIN for the web page (`airsense set-pin` with no number = no PIN) |
-| `airsense add 192.168.1.241` | add a sensor |
+| `airsense scan` | find + add **BleBox sensors** on the network (only sensors; other network: `airsense scan 10.0.0.0/24`) |
+| `airsense add 192.168.1.241` | add a sensor by IP |
 | `airsense city Ptolemaida` | weather location |
 | `airsense tailscale` | Tailscale connect / login (link + QR) |
 | `airsense tailscale on` / `off` | Tailscale ON / OFF (OFF = local only) |
@@ -363,7 +364,8 @@ wget -qO get.sh https://raw.githubusercontent.com/nikkpap/AirSense/main/get.sh &
 | `airsense wifi` | (μόνο Raspberry Pi) μενού WiFi: σάρωση, νέο, αποθηκευμένα, προτεραιότητα |
 | `airsense set-admin` | κωδικός διαχειριστή (ρυθμίσεις από web/κινητό) |
 | `airsense set-pin 1234` | PIN για τη web σελίδα (`airsense set-pin` χωρίς αριθμό = χωρίς PIN) |
-| `airsense add 192.168.1.241` | προσθήκη αισθητήρα |
+| `airsense scan` | εύρεση + προσθήκη **αισθητήρων BleBox** στο δίκτυο (μόνο αισθητήρες· άλλο δίκτυο: `airsense scan 10.0.0.0/24`) |
+| `airsense add 192.168.1.241` | προσθήκη αισθητήρα με IP |
 | `airsense city Ptolemaida` | τοποθεσία καιρού |
 | `airsense tailscale` | σύνδεση / login Tailscale (link + QR) |
 | `airsense tailscale on` / `off` | Tailscale ON / OFF (OFF = μόνο τοπικά) |

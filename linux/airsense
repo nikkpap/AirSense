@@ -6,6 +6,14 @@ U=$(cat /var/lib/airsense/user 2>/dev/null); [ -n "$U" ] || U=$(getent passwd 10
 UH=$(getent passwd "$U" | cut -d: -f6); [ -d "$UH" ] || UH=$HOME
 BOARD=$(cat /var/lib/airsense/board 2>/dev/null); MODEL=$(cat /var/lib/airsense/model 2>/dev/null)
 app() { sudo python3 "$APP" --data "$DATA" "$@"; }
+# settings change → the running server keeps its settings in memory, so: stop → change → start
+cfgapp() {
+  local was=0 rc
+  systemctl is-active --quiet airsense-boot && { was=1; sudo systemctl stop airsense-boot; }
+  app "$@"; rc=$?
+  [ $was = 1 ] && { sudo systemctl start airsense-boot; echo "↻ server restarted with the new settings"; }
+  return $rc
+}
 ip_() { hostname -I | awk '{print $1}'; }
 case "${1:-status}" in
   status|doctor|diag)
@@ -127,10 +135,13 @@ case "${1:-status}" in
             timedatectl status 2>/dev/null | sed 's/^ *//' | grep -E 'Local time|Time zone|synchronized|NTP service'
             echo "NTP servers: $(grep -h '^NTP=' /etc/systemd/timesyncd.conf.d/*.conf 2>/dev/null | cut -d= -f2)"
             timedatectl timesync-status 2>/dev/null | grep -E 'Server|Poll|Offset' | sed 's/^ */  /' ;;
-  set-admin) app --set-admin ;;
-  set-pin)  app --set-pin "${2:-}" ;;
-  add)      app --add "$2" ;;
-  city)     shift; app --locate "$*" ;;
+  set-admin) cfgapp --set-admin ;;
+  set-pin)  cfgapp --set-pin "${2:-}" ;;
+  add)      [ -n "${2:-}" ] || { echo "Usage: airsense add 192.168.1.241   (or: airsense scan)"; exit 1; }
+            cfgapp --add "$2" ;;
+  scan)     echo "🔍 Looking for BleBox sensors on the network (only sensors are added)…"
+            cfgapp --scan ${2:+"$2"} ;;
+  city)     shift; cfgapp --locate "$*" ;;
   tailscale)
     case "${2:-}" in
       on)  cp -f /usr/local/share/airsense/tailscale.sh "$UH/tailscale.sh" 2>/dev/null || { echo "✖ tailscale.sh template is missing"; exit 1; }
@@ -162,7 +173,8 @@ airsense update              check GitHub + update now
 airsense autoupdate [on|off] automatic updates (every 6 hours)
 airsense set-admin           admin password
 airsense set-pin 1234        PIN for the web page (empty = none)
-airsense add 192.168.1.241   add a sensor
+airsense scan [10.0.0.0/24]  find + add BleBox sensors on the network (only sensors)
+airsense add 192.168.1.241   add a sensor by IP
 airsense city Ptolemaida     location for the weather
 airsense tailscale [on|off]  Tailscale (login / ON / OFF)
 airsense uninstall
