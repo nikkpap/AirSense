@@ -121,6 +121,27 @@ System: `sudo reboot` · `sudo poweroff` (before unplugging) · `sudo airsense-u
 Quick test without a release: `scp AirSense.pyw pico@airsense.local:~/AirSense_v1.6.15.pyw` then `ssh pico@airsense.local "airsense restart"`
 (it installs the highest `APP_VERSION` it finds in the home folder). While testing, `airsense autoupdate off` stops GitHub from replacing it.
 
+## 🔀 Another network / subnet (e.g. from 192.168.1.x to 10.0.0.x)
+**No new SD card, no reinstall.** Nothing is tied to 192.168.1.x:
+- **Board IP:** taken automatically from the router (DHCP) on any network. With the fixed MAC the new router always gives it the same IP.
+- **Address:** `http://airsense.local:8765` works on every network — no need to know the IP.
+- **Tailscale:** connects by itself; the `100.x.x.x` address **stays the same** everywhere — nothing to change on the phone.
+- **Sensors:** if their IP changes, AirSense finds them again by their ID. A **new** sensor: `airsense add NEW_IP`.
+- **Only rule:** the board and the sensors must be on the **same** network (same router).
+- `SENSORS=` in `airsense-settings.txt` was applied once at the start — it does not lock anything.
+- Find the board on the new network: `airsense.local`, the Tailscale app, or `ssh USER@airsense` over Tailscale from anywhere.
+- Raspberry Pi on a new WiFi: `airsense wifi` (before you move it), or `airsense-wifi.txt` on the SD card.
+
+## 🔌 SSH over USB (Luckfox Pico)
+With the Ubuntu image the board shows up on the PC as a network card over USB (RNDIS) with a fixed IP **172.32.0.70**
+([Luckfox wiki](https://wiki.luckfox.com/Luckfox-Pico/SSH-Telnet-Login)) — handy with no network or an unknown IP.
+1. Connect a USB-C **data** cable (not a charge-only one) from the board to the PC — it also powers the board.
+2. The first time Windows may need the driver: **RK DriverAssistant** (see the Luckfox RNDIS guide).
+3. Windows → Network settings → on the new **RNDIS** adapter set IP **172.32.0.1**, mask **255.255.0.0**.
+4. `ssh pico@172.32.0.70` (with your **new** password).
+
+Raspberry Pi Zero 2 W: SSH over USB needs extra setup (USB gadget) — use `airsense-wifi.txt` on the SD card for a new network instead.
+
 ## 🌍 Tailscale — access from anywhere
 - **ON** = the file `~/tailscale.sh` exists · **OFF** (local only) = it does not. (`airsense tailscale on/off`)
 - Login: open the link / QR code it shows → Google / Microsoft / Apple account. Or `AUTHKEY="tskey-auth-…"` inside `tailscale.sh`.
@@ -275,6 +296,27 @@ wget -qO get.sh https://raw.githubusercontent.com/nikkpap/AirSense/main/get.sh &
 
 Γρήγορη δοκιμή χωρίς release: `scp AirSense.pyw pico@airsense.local:~/AirSense_v1.6.15.pyw` και `ssh pico@airsense.local "airsense restart"`
 (εγκαθιστά το μεγαλύτερο `APP_VERSION` που βρίσκει στο home). Όσο δοκιμάζεις, `airsense autoupdate off` ώστε να μην το αντικαταστήσει το GitHub.
+
+## 🔀 Άλλο δίκτυο / subnet (π.χ. από 192.168.1.x σε 10.0.0.x)
+**Ούτε νέα κάρτα, ούτε ξανά εγκατάσταση.** Τίποτα δεν είναι «κλειδωμένο» στο 192.168.1.x:
+- **IP πλακέτας:** την παίρνει αυτόματα από το router (DHCP) σε κάθε δίκτυο. Με τη σταθερή MAC το νέο router της δίνει πάντα την ίδια IP.
+- **Διεύθυνση:** το `http://airsense.local:8765` δουλεύει σε κάθε δίκτυο — δεν χρειάζεται να ξέρεις την IP.
+- **Tailscale:** συνδέεται μόνο του· η `100.x.x.x` **μένει ίδια** παντού — στο κινητό δεν αλλάζεις τίποτα.
+- **Αισθητήρες:** αν αλλάξει η IP τους, το AirSense τους ξαναβρίσκει από το ID τους. **Νέος** αισθητήρας: `airsense add ΝΕΑ_IP`.
+- **Μόνος κανόνας:** πλακέτα και αισθητήρες στο **ίδιο** δίκτυο (ίδιο router).
+- Το `SENSORS=` στο `airsense-settings.txt` εφαρμόστηκε μία φορά στην αρχή — δεν δεσμεύει τίποτα.
+- Βρες την πλακέτα στο νέο δίκτυο: `airsense.local`, η εφαρμογή Tailscale, ή `ssh ΧΡΗΣΤΗΣ@airsense` μέσω Tailscale από οπουδήποτε.
+- Raspberry Pi σε νέο WiFi: `airsense wifi` (πριν το μεταφέρεις) ή `airsense-wifi.txt` στην κάρτα SD.
+
+## 🔌 SSH μέσω USB (Luckfox Pico)
+Με την εικόνα Ubuntu η πλακέτα εμφανίζεται στο PC ως κάρτα δικτύου μέσω USB (RNDIS) με σταθερή IP **172.32.0.70**
+([wiki Luckfox](https://wiki.luckfox.com/Luckfox-Pico/SSH-Telnet-Login)) — χρήσιμο χωρίς δίκτυο ή όταν δεν ξέρεις την IP.
+1. Καλώδιο USB-C **δεδομένων** (όχι μόνο φόρτισης) από την πλακέτα στο PC — δίνει και ρεύμα.
+2. Την πρώτη φορά μπορεί να χρειαστεί driver: **RK DriverAssistant** (δες τον οδηγό RNDIS της Luckfox).
+3. Windows → Ρυθμίσεις δικτύου → στη νέα κάρτα **RNDIS** βάλε IP **172.32.0.1**, μάσκα **255.255.0.0**.
+4. `ssh pico@172.32.0.70` (με τον **νέο** σου κωδικό).
+
+Raspberry Pi Zero 2 W: το SSH μέσω USB θέλει ειδική ρύθμιση (USB gadget) — για νέο δίκτυο χρησιμοποίησε το `airsense-wifi.txt` στην κάρτα SD.
 
 ## 🌍 Tailscale — πρόσβαση από παντού
 - **ON** = υπάρχει το αρχείο `~/tailscale.sh` · **OFF** (μόνο τοπικά) = δεν υπάρχει. (`airsense tailscale on/off`)
