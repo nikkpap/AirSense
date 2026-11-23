@@ -82,7 +82,7 @@ If "Connect NOW" to a new WiFi fails, the Pi **goes back by itself** to the prev
 8. 10 min later and every 6 hours: **automatic update** from GitHub (`airsense autoupdate off` to stop it).
 
 ## Commands
-All commands are in the [README](https://github.com/nikkpap/AirSense#-commands-on-the-board-ssh) — the most useful:
+All commands are in the [README](https://github.com/nikkpap/AirSense#-commands-on-the-board-ssh--all-of-them) — the most useful:
 `airsense` (diagnosis) · `airsense qr` · `airsense wifi` · `airsense update` · `airsense password` · `airsense clock` · `airsense tailscale`.
 
 ## Notes

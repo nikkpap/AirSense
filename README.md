@@ -83,24 +83,43 @@ Install the APK → "Add server" → scan the QR code (`airsense qr` on the boar
 
 ---
 
-## 🧰 Commands on the board (ssh)
+## 🧰 Commands on the board (ssh) — all of them
 | Command | What it does |
 |---|---|
-| `airsense` / `airsense status` | **full diagnosis** with ✔/⚠/✖: server, sensors, network, WiFi, clock/NTP, Tailscale, updates, password, RAM/SD card |
+| `airsense` / `airsense status` / `airsense doctor` / `airsense diag` | **full diagnosis** with ✔/⚠/✖: server, sensors, network, WiFi, clock/NTP, Tailscale, updates, password, RAM/swap/SD card, last messages |
+| `airsense help` | the list of all commands |
 | `airsense qr` | QR codes for the phone (local + Tailscale) |
-| `airsense logs` / `airsense live` | messages / live log |
-| `airsense restart` / `stop` | restart / stop the server |
+| `airsense logs` | last messages (server + boot + Tailscale) |
+| `airsense live` | live log (Ctrl+C to exit) |
+| `airsense restart` | restart the server |
+| `airsense stop` | stop the server (it starts again on the next reboot) |
 | `airsense update` | check GitHub + update **now** |
-| `airsense autoupdate on\|off` | automatic updates (every 6 hours) |
-| `airsense password` | change the user password (and root's, if it is the factory default) |
-| `airsense clock [Europe/Athens]` | clock, time zone, NTP sync |
-| `airsense wifi` | (Raspberry Pi) WiFi: scan, add a network, saved networks |
+| `airsense autoupdate` | automatic update state + last checks |
+| `airsense autoupdate on` / `off` | automatic updates on/off (every 6 hours) |
+| `airsense password` (or `passwd`) | change the user password (and root's, if it is the factory default) |
+| `airsense clock` (or `time`) | time, time zone, NTP sync |
+| `airsense clock Europe/Athens` | change the time zone |
 | `airsense mac` | MAC address — for an IP reservation in the router |
-| `airsense set-admin` / `set-pin 1234` | admin password / PIN of the web page |
+| `airsense wifi` | (Raspberry Pi only) WiFi menu: scan, add, saved networks, priority |
+| `airsense set-admin` | admin password (settings from the web page / phone) |
+| `airsense set-pin 1234` | PIN for the web page (`airsense set-pin` with no number = no PIN) |
 | `airsense add 192.168.1.241` | add a sensor |
 | `airsense city Ptolemaida` | weather location |
-| `airsense tailscale [on\|off]` | Tailscale login / ON / OFF |
+| `airsense tailscale` | Tailscale connect / login (link + QR) |
+| `airsense tailscale on` / `off` | Tailscale ON / OFF (OFF = local only) |
 | `airsense uninstall` | remove (the data stays in `/var/lib/airsense`) |
+
+System: `sudo reboot` · `sudo poweroff` (before unplugging) · `sudo airsense-update --force` (= `airsense update`) ·
+`sudo airsense-wifi add "Name" "password"` (Pi) · logs: `/var/lib/airsense/boot.log`, `update.log`, `tailscale.log`.
+
+### ✏ I changed `AirSense.pyw` — how does it get to the board?
+`airsense update` installs only the **latest GitHub release**, and only if its version is **higher** than the board's.
+1. Change `desktop/AirSense.pyw` **and** raise `APP_VERSION` (e.g. `"1.6.15"`) → push to `main`.
+2. GitHub → **Actions** → **Build & Release** → **Run workflow** → ✔ release.
+3. On the board: `airsense update` (or it updates by itself within 6 hours).
+
+Quick test without a release: `scp AirSense.pyw pico@airsense.local:~/AirSense_v1.6.15.pyw` then `ssh pico@airsense.local "airsense restart"`
+(it installs the highest `APP_VERSION` it finds in the home folder). While testing, `airsense autoupdate off` stops GitHub from replacing it.
 
 ## 🌍 Tailscale — access from anywhere
 - **ON** = the file `~/tailscale.sh` exists · **OFF** (local only) = it does not. (`airsense tailscale on/off`)
@@ -219,24 +238,43 @@ wget -qO get.sh https://raw.githubusercontent.com/nikkpap/AirSense/main/get.sh &
 
 ---
 
-## 🧰 Εντολές στην πλακέτα (ssh)
+## 🧰 Εντολές στην πλακέτα (ssh) — όλες
 | Εντολή | Τι κάνει |
 |---|---|
-| `airsense` / `airsense status` | **πλήρης διάγνωση** με ✔/⚠/✖: server, αισθητήρες, δίκτυο, WiFi, ρολόι/NTP, Tailscale, ενημερώσεις, κωδικός, RAM/κάρτα |
+| `airsense` / `airsense status` / `airsense doctor` / `airsense diag` | **πλήρης διάγνωση** με ✔/⚠/✖: server, αισθητήρες, δίκτυο, WiFi, ρολόι/NTP, Tailscale, ενημερώσεις, κωδικός, RAM/swap/κάρτα, τελευταία μηνύματα |
+| `airsense help` | η λίστα με όλες τις εντολές |
 | `airsense qr` | QR για το κινητό (τοπικό + Tailscale) |
-| `airsense logs` / `airsense live` | μηνύματα / ζωντανά |
-| `airsense restart` / `stop` | επανεκκίνηση / στάση server |
+| `airsense logs` | τελευταία μηνύματα (server + boot + Tailscale) |
+| `airsense live` | ζωντανό log (Ctrl+C για έξοδο) |
+| `airsense restart` | επανεκκίνηση του server |
+| `airsense stop` | σταματά τον server (ξεκινά ξανά στο επόμενο reboot) |
 | `airsense update` | έλεγχος GitHub + ενημέρωση **τώρα** |
-| `airsense autoupdate on\|off` | αυτόματες ενημερώσεις (κάθε 6 ώρες) |
-| `airsense password` | αλλαγή κωδικού χρήστη (και root, αν είναι εργοστασιακός) |
-| `airsense clock [Europe/Athens]` | ρολόι, ζώνη ώρας, συγχρονισμός NTP |
-| `airsense wifi` | (Raspberry Pi) WiFi: σάρωση, νέο δίκτυο, αποθηκευμένα |
-| `airsense mac` | MAC — για κράτηση IP στο router |
-| `airsense set-admin` / `set-pin 1234` | κωδικός διαχειριστή / PIN web σελίδας |
+| `airsense autoupdate` | κατάσταση αυτόματης ενημέρωσης + τελευταίοι έλεγχοι |
+| `airsense autoupdate on` / `off` | αυτόματη ενημέρωση ναι/όχι (κάθε 6 ώρες) |
+| `airsense password` (ή `passwd`) | αλλαγή κωδικού χρήστη (και του root, αν είναι εργοστασιακός) |
+| `airsense clock` (ή `time`) | ώρα, ζώνη, συγχρονισμός NTP |
+| `airsense clock Europe/Athens` | αλλαγή ζώνης ώρας |
+| `airsense mac` | η MAC — για κράτηση IP στο router |
+| `airsense wifi` | (μόνο Raspberry Pi) μενού WiFi: σάρωση, νέο, αποθηκευμένα, προτεραιότητα |
+| `airsense set-admin` | κωδικός διαχειριστή (ρυθμίσεις από web/κινητό) |
+| `airsense set-pin 1234` | PIN για τη web σελίδα (`airsense set-pin` χωρίς αριθμό = χωρίς PIN) |
 | `airsense add 192.168.1.241` | προσθήκη αισθητήρα |
 | `airsense city Ptolemaida` | τοποθεσία καιρού |
-| `airsense tailscale [on\|off]` | Tailscale login / ON / OFF |
+| `airsense tailscale` | σύνδεση / login Tailscale (link + QR) |
+| `airsense tailscale on` / `off` | Tailscale ON / OFF (OFF = μόνο τοπικά) |
 | `airsense uninstall` | αφαίρεση (τα δεδομένα μένουν στο `/var/lib/airsense`) |
+
+Σύστημα: `sudo reboot` · `sudo poweroff` (πριν βγάλεις το ρεύμα) · `sudo airsense-update --force` (= `airsense update`) ·
+`sudo airsense-wifi add "Όνομα" "κωδικός"` (Pi) · logs: `/var/lib/airsense/boot.log`, `update.log`, `tailscale.log`.
+
+### ✏ Άλλαξα το `AirSense.pyw` — πώς πάει στην πλακέτα;
+Το `airsense update` εγκαθιστά μόνο το **τελευταίο release του GitHub**, και μόνο αν η έκδοσή του είναι **μεγαλύτερη** από της πλακέτας.
+1. Αλλαγή στο `desktop/AirSense.pyw` **και** ανέβασμα του `APP_VERSION` (π.χ. `"1.6.15"`) → push στο `main`.
+2. GitHub → **Actions** → **Build & Release** → **Run workflow** → ✔ release.
+3. Στην πλακέτα: `airsense update` (ή μόνη της μέσα σε 6 ώρες).
+
+Γρήγορη δοκιμή χωρίς release: `scp AirSense.pyw pico@airsense.local:~/AirSense_v1.6.15.pyw` και `ssh pico@airsense.local "airsense restart"`
+(εγκαθιστά το μεγαλύτερο `APP_VERSION` που βρίσκει στο home). Όσο δοκιμάζεις, `airsense autoupdate off` ώστε να μην το αντικαταστήσει το GitHub.
 
 ## 🌍 Tailscale — πρόσβαση από παντού
 - **ON** = υπάρχει το αρχείο `~/tailscale.sh` · **OFF** (μόνο τοπικά) = δεν υπάρχει. (`airsense tailscale on/off`)
