@@ -132,6 +132,19 @@ Quick test without a release: `scp AirSense.pyw pico@airsense.local:~/AirSense_v
 - Find the board on the new network: `airsense.local`, the Tailscale app, or `ssh USER@airsense` over Tailscale from anywhere.
 - Raspberry Pi on a new WiFi: `airsense wifi` (before you move it), or `airsense-wifi.txt` on the SD card.
 
+### ❓ `http://airsense.local:8765` does not open (new place, e.g. the office)
+Plug in Ethernet + power and wait **1–2 minutes** (IP from DHCP, clock sync, server start). Check:
+- Your PC / phone is on the **same network** as the board.
+- **Windows 10/11:** `.local` normally works. **Android:** not always (depends on the version / browser) → use the IP or Tailscale on the phone.
+- **Company networks** often block `.local` (WiFi client isolation, WiFi and cables on separate VLANs) — the board works, only the name does not answer.
+- The **BleBox sensors must be on the same network** too — if they stayed at home, the page opens but the sensors show Offline.
+
+Other ways in, from the surest:
+1. **Tailscale:** `http://100.x.x.x:8765` — same as at home; connects by itself as soon as it has internet, even behind a company firewall. No need to know the office IP.
+2. **Find the IP:** the router's page, or Fing / Angry IP Scanner → `http://IP:8765`.
+3. **ssh over Tailscale:** `ssh pico@airsense` → `airsense status` shows the local IP.
+4. **USB-C cable to the PC (Luckfox):** `ssh pico@172.32.0.70` — see *SSH over USB* below.
+
 ## 🔌 SSH over USB (Luckfox Pico)
 With the Ubuntu image the board shows up on the PC as a network card over USB (RNDIS) with a fixed IP **172.32.0.70**
 ([Luckfox wiki](https://wiki.luckfox.com/Luckfox-Pico/SSH-Telnet-Login)) — handy with no network or an unknown IP.
@@ -348,6 +361,19 @@ wget -qO get.sh https://raw.githubusercontent.com/nikkpap/AirSense/main/get.sh &
 - Το `SENSORS=` στο `airsense-settings.txt` εφαρμόστηκε μία φορά στην αρχή — δεν δεσμεύει τίποτα.
 - Βρες την πλακέτα στο νέο δίκτυο: `airsense.local`, η εφαρμογή Tailscale, ή `ssh ΧΡΗΣΤΗΣ@airsense` μέσω Tailscale από οπουδήποτε.
 - Raspberry Pi σε νέο WiFi: `airsense wifi` (πριν το μεταφέρεις) ή `airsense-wifi.txt` στην κάρτα SD.
+
+### ❓ Δεν ανοίγει το `http://airsense.local:8765` (νέο μέρος, π.χ. γραφείο)
+Ethernet + ρεύμα και περίμενε **1–2 λεπτά** (IP από DHCP, ώρα, εκκίνηση server). Έλεγξε:
+- Το PC / κινητό σου είναι στο **ίδιο δίκτυο** με την πλακέτα.
+- **Windows 10/11:** το `.local` κανονικά δουλεύει. **Android:** όχι πάντα (ανάλογα με έκδοση / browser) → στο κινητό IP ή Tailscale.
+- **Εταιρικά δίκτυα** συχνά κόβουν το `.local` (απομόνωση συσκευών στο WiFi, WiFi και καλώδια σε χωριστά VLAN) — η πλακέτα δουλεύει, απλά το όνομα δεν απαντά.
+- Οι **αισθητήρες BleBox πρέπει να είναι κι αυτοί στο ίδιο δίκτυο** — αν έμειναν στο σπίτι, η σελίδα ανοίγει αλλά δείχνει τους αισθητήρες Offline.
+
+Άλλοι τρόποι, από τον πιο σίγουρο:
+1. **Tailscale:** `http://100.x.x.x:8765` — όπως στο σπίτι· συνδέεται μόνο του μόλις βρει internet, ακόμα και πίσω από εταιρικό firewall. Δεν χρειάζεται να ξέρεις την IP του γραφείου.
+2. **Βρες την IP:** σελίδα του router ή Fing / Angry IP Scanner → `http://IP:8765`.
+3. **ssh μέσω Tailscale:** `ssh pico@airsense` → `airsense status` δείχνει την τοπική IP.
+4. **Καλώδιο USB-C στο PC (Luckfox):** `ssh pico@172.32.0.70` — δες *SSH μέσω USB* παρακάτω.
 
 ## 🔌 SSH μέσω USB (Luckfox Pico)
 Με την εικόνα Ubuntu η πλακέτα εμφανίζεται στο PC ως κάρτα δικτύου μέσω USB (RNDIS) με σταθερή IP **172.32.0.70**
