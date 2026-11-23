@@ -1,4 +1,99 @@
-# 🌬 AirSense σε Raspberry Pi (Zero 2 W / 3 / 4 / 5) — οδηγίες βήμα-βήμα
+# 🌬 AirSense on Raspberry Pi (Zero 2 W / 3 / 4 / 5) — step-by-step guide
+
+**[English](#-english) · [Ελληνικά](#-ελληνικά)**
+
+**Developer:** Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM
+
+---
+
+# 🇬🇧 English
+
+The Raspberry Pi becomes a 24/7 AirSense server: readings, charts, weather, PDF, email — and your phone connects to it.
+Same scripts as the Luckfox: same `Step X/6` progress bars, same `airsense` command, automatic updates from GitHub, Tailscale on/off.
+Extra on the Pi: **WiFi** (many networks, also from the SD card).
+
+## What you need
+- Raspberry Pi **Zero 2 W** (or 3 / 4 / 5)
+- microSD card **8GB+** (a good brand, A1)
+- 5V power supply (Zero 2 W: 2.5A micro-USB)
+- A Windows/Mac PC to write the card
+
+> The Zero 2 W sees **2.4 GHz WiFi only**.
+
+## Step 1 — Write the card (Raspberry Pi Imager)
+1. Download [Raspberry Pi Imager](https://www.raspberrypi.com/software/) and open it.
+2. **Device:** Raspberry Pi Zero 2 W · **OS:** *Raspberry Pi OS (other)* → **Raspberry Pi OS Lite (64-bit)** · **Storage:** the card.
+3. **Next → Edit settings** (very important):
+   - **Hostname:** `airsense`
+   - **Username / password:** e.g. `pi` and **your own** password (not `raspberry`)
+   - **Wireless LAN:** name + password of your WiFi · **country: GR**
+   - **Locale:** Europe/Athens
+   - tab **Services → Enable SSH** (with password)
+4. **Save → Yes** → wait for it to write and verify.
+5. Card in the Pi → power → wait **2–3 minutes** (the first boot is slow).
+
+## Step 2 — Log in with ssh
+From Windows (PowerShell / CMD):
+```
+ssh pi@airsense.local
+```
+(If it is not found: the IP from the router or the **Fing** app → `ssh pi@192.168.1.xx`.) Type **yes** and your password.
+
+## Step 3 — Install with ONE command
+```bash
+wget -qO get.sh https://raw.githubusercontent.com/nikkpap/AirSense/main/get.sh && sudo bash get.sh
+```
+1. **Step 1/6** — all questions **together at the start** (then you can leave, it runs by itself):
+   - **Time zone**: a numbered list with the UTC offset (e.g. `1) Europe/Athens UTC+02:00 ← suggested`) → **Enter**
+   - Name **airsense** → Enter (Y)
+   - **Tailscale** (from anywhere) → **Y** or **N** (local only)
+   - "Save another WiFi at the end?" → **Y** if you also want the site's WiFi / your phone hotspot
+2. **Step 2/6** clock (NTP `europe.pool.ntp.org`) · **3/6** packages (5–10 min) · **4/6** services · **5/6** start the server · **6/6** Tailscale.
+3. Tailscale: open the **link / QR code** it shows (phone or PC) → log in. It waits up to 10 min. Then **Tailscale SSH** turns on by itself.
+4. At the end: address + **QR code** for the phone → "Reboot now?" → **Enter**.
+5. After the reboot: `ssh pi@airsense.local` → if the password is still the factory one (`raspberry`) it asks you to change it → **Y**.
+
+> **Old install** (ALU HygroLink or AirSense ≤ v1.6.13 with `install_pi.sh`): just run the same command.
+> The old service is replaced and the data is copied from `~/airsense-data` to `/var/lib/airsense`
+> (the old folder is kept as a copy). A Tailscale that already works stays ON.
+
+### From Windows without internet on the Pi
+Unzip **AirSense-Pi_vX.zip** → double-click **install_from_windows.bat** → name/IP, user, password.
+
+## 📶 WiFi
+| I want | I do |
+|---|---|
+| Menu (scan, new network, saved, priority) | `airsense wifi` |
+| Quick | `sudo airsense-wifi add "WiFi name" "password"` |
+| **Without ssh** (e.g. at a new site) | Card in the PC → on **bootfs** copy `airsense-wifi.example.txt` as **`airsense-wifi.txt`** → write `ssid` / `password` → card in the Pi → power |
+
+The Pi keeps **all** networks and joins whichever it finds (priority: higher number first).
+`airsense-wifi.txt` is applied on every boot; then the password is removed from the card and the result + IP are written to `airsense-wifi-log.txt`.
+If "Connect NOW" to a new WiFi fails, the Pi **goes back by itself** to the previous one in ~1 minute.
+
+## 🔄 Automatic on every boot
+1. WiFi from the card (if `airsense-wifi.txt` exists).
+2. Finds the newest `AirSense_vX.pyw` (home, card, USB) → installs it.
+3. Applies `airsense-settings.txt` (if it changed).
+4. Waits for the correct time (NTP) → then checks/installs what is missing.
+5. Checks whether the password is the factory one (→ question at the next ssh login).
+6. Tailscale: `~/tailscale.sh` exists → ON · missing → local only.
+7. Starts the server (if it stops, it starts again by itself).
+8. 10 min later and every 6 hours: **automatic update** from GitHub (`airsense autoupdate off` to stop it).
+
+## Commands
+All commands are in the [README](https://github.com/nikkpap/AirSense#-commands-on-the-board-ssh) — the most useful:
+`airsense` (diagnosis) · `airsense qr` · `airsense wifi` · `airsense update` · `airsense password` · `airsense clock` · `airsense tailscale`.
+
+## Notes
+- **Data:** `/var/lib/airsense` (history, settings, logs). Backup: `sudo tar czf ~/airsense-backup.tar.gz /var/lib/airsense`.
+- **Power:** `sudo poweroff` before you unplug it — it protects the card.
+- **Reset from scratch:** write the card again (Step 1) and run the command again (Step 3).
+
+---
+---
+
+# 🇬🇷 Ελληνικά
 
 **Developer:** Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM
 

@@ -1,4 +1,154 @@
-# 🌬 AirSense σε Luckfox Pico Pro / Max — οδηγίες βήμα-βήμα
+# 🌬 AirSense on Luckfox Pico Pro / Max — step-by-step guide
+
+**[English](#-english) · [Ελληνικά](#-ελληνικά)**
+
+**Developer:** Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM
+
+---
+
+# 🇬🇧 English
+
+The small Luckfox Pico Pro (128MB) / Max (256MB) board becomes a 24/7 AirSense server:
+readings, charts, weather, PDF, email — and your phone connects to it.
+
+> The board has **no WiFi** → it needs an **Ethernet cable** to the router.
+> The sensor can be on the WiFi of the same router.
+
+## What you need
+- Luckfox Pico Pro or Max
+- microSD card, **8GB or bigger**
+- Ethernet cable to the router
+- USB-C cable for power (5V phone charger)
+- A Windows PC (to write the card and run the install)
+
+## Step 1 — Write Ubuntu to the card (once, or whenever you want a "reset")
+1. From the Luckfox wiki — RV1106 pages (the Pico Pro/Max belong there):
+   [Image Overview and Download](https://wiki.luckfox.com/Luckfox-Pico-RV1106/Getting-Started/overview) ·
+   [Image Flashing](https://wiki.luckfox.com/Luckfox-Pico-RV1106/Getting-Started/Image-flashing) — download the image
+   **Ubuntu_Luckfox_Pico_Pro_MicroSD** (for the Max: **Ubuntu_Luckfox_Pico_Max_MicroSD**) and **SocToolKit**.
+2. Format the card as **FAT32** (not exFAT; a card >32GB: use **Rufus** → File system FAT32).
+3. Open **SocToolKit** → **RV1106** → **SDBoot** (not SD upgrade) → choose the card →
+   load the **individual `.img` files** of the Ubuntu folder (**not** `update.img`) → **Start create SD card**.
+4. Put the card in the board, connect **Ethernet** and then **power**. Wait **1–2 minutes**.
+
+> If after 2 minutes it is not on the network, or the old system answers (Buildroot, user root):
+> the board booted from its own flash instead of the card — see the Luckfox wiki section on booting from the SD card.
+
+## Step 2 — Find the IP
+- The router's page → "connected devices" (name usually *luckfox*), **or**
+- the **Fing** app on the phone (network scan), or Angry IP Scanner on the PC.
+
+## Step 3 — Install (ONCE)
+### ⭐ Easiest: one command (always downloads the latest version)
+Log in with ssh (`ssh pico@IP`, password `luckfox` — or PuTTY / MobaXterm) and type:
+```bash
+wget -qO get.sh https://raw.githubusercontent.com/nikkpap/AirSense/main/get.sh && sudo bash get.sh
+```
+(The old address `…/main/luckfox/get.sh` works too — same file.)
+
+**All questions come together in Step 1/6** — then it runs by itself:
+- **Time zone** from a list with the UTC offset (`1) Europe/Athens UTC+02:00 ← suggested`) → **Enter**
+- name **airsense** (Y) · fixed MAC (Y) · **Tailscale** (Y = from anywhere, N = local only)
+
+Then by itself: **clock** (time zone + NTP `europe.pool.ntp.org`, synced **before** apt — the board has no clock battery),
+swap, packages, `/run` 32MB (little RAM), services, server, Tailscale + Tailscale SSH, and at the end a reboot to check everything.
+
+**After the reboot:** `ssh pico@airsense.local` → because the password is still the factory **luckfox**, it asks
+"Change it now? (Y/n)" → **Enter** → type the current one (`luckfox`), then the **new** one twice.
+If **root** also has a factory password, it asks for that one too. Any time: `airsense password`.
+Run the same command to **update** to a new version.
+
+### From Windows (no internet download on the board)
+1. Unzip **AirSense-Luckfox_vX.zip** into a folder.
+2. (Optional) open **airsense-settings.txt** and write the admin password, sensor IP, city.
+3. Double-click **install_from_windows.bat** → type the **IP** → password **luckfox** (twice).
+4. Questions (all at the start): **Enter** = default. Tailscale → **Y** (from anywhere) or **N** (local only).
+
+### Or by hand with scp
+```bash
+scp -r AirSense-Luckfox pico@IP:~/airsense-setup
+ssh pico@IP                 # password: luckfox
+sudo bash ~/airsense-setup/airsense-setup.sh
+```
+
+At the end it shows the address and a **QR code** → scan it with the phone. Done!
+
+## After that: everything automatic on every boot
+On every power-on the board (service `airsense-boot`):
+1. **Looks for** `AirSense*.py` / `AirSense_vX.pyw` in the card root, `/home/pico` and on a **USB stick**.
+   If it finds a **newer version**, it installs it by itself.
+2. Applies **airsense-settings.txt** (if it changed).
+3. Waits for the correct time from the internet (European NTP pool).
+4. Checks/installs what is missing (python3, reportlab for PDF, fonts) · checks whether the password is still the factory one.
+5. **Tailscale:** if **`tailscale.sh`** exists → runs it (ON) · if it does **not** → local only (OFF).
+6. Starts the server — if it ever stops, it starts again by itself.
+
+### 🔄 Automatic update from GitHub
+The board checks for a new version **10 minutes after every boot and every 6 hours**.
+If GitHub has a newer one, it downloads it, checks it and installs it — data and settings are kept.
+
+| I want | Command |
+|---|---|
+| Check + update **now** | `airsense update` |
+| State / last checks | `airsense autoupdate` |
+| Turn off / on | `airsense autoupdate off` / `on` (or `AUTO_UPDATE=off` in airsense-settings.txt) |
+| History | `/var/lib/airsense/update.log` |
+
+### 🔄 Manual update
+The same command as Step 3 (`wget -qO get.sh … && sudo bash get.sh`) — **or** put the new `AirSense_vX.pyw`
+in `/home/pico` (or on a USB stick in the board) → `sudo reboot`.
+The data (history, settings) stays in `/var/lib/airsense`.
+
+### 🌍 Tailscale ON / OFF
+| I want | I do |
+|---|---|
+| ON | file **`tailscale.sh`** in `/home/pico` (or card root / USB) → reboot · or `airsense tailscale on` |
+| OFF (local only) | delete / rename `tailscale.sh` → reboot · or `airsense tailscale off` |
+| Log in the account | `airsense tailscale` → shows a link + QR to log in (Google/Microsoft/Apple) |
+| Without a browser | write `AUTHKEY="tskey-auth-…"` inside `tailscale.sh` |
+
+On the phone: the **Tailscale** app with the **same account** → `http://100.x.x.x:8765` (`airsense` shows it).
+Tailscale SSH: `ssh pico@airsense` from any of your Tailscale devices. In the admin console: **Disable key expiry**.
+
+## Useful commands (over ssh)
+| Command | What it does |
+|---|---|
+| `airsense` or `airsense status` | **full diagnosis** (server, sensors, network, clock, Tailscale, updates, password, system) with ✔/⚠/✖ |
+| `airsense qr` | QR codes for the phone |
+| `airsense logs` / `airsense live` | messages / live |
+| `airsense restart` | restart the server |
+| `airsense update` | check GitHub + update now |
+| `airsense password` | change the password (and root's) |
+| `airsense clock [Europe/Athens]` | clock, time zone, NTP |
+| `airsense mac` | MAC for an IP reservation in the router |
+| `airsense set-admin` | admin password |
+| `airsense set-pin 1234` | PIN for the web page |
+| `airsense add 192.168.1.241` | add a sensor |
+| `airsense city Ptolemaida` | weather location |
+| `airsense tailscale on/off` | Tailscale |
+
+## Known issues of the Ubuntu image (fixed automatically)
+- Random MAC → new IP on every boot: fixed MAC (the IP changes once, then stays). `airsense mac` → IP reservation in the router.
+- Tailscale: installed from the official static package (no apt), in its own service; log: `/var/lib/airsense/tailscale.log`.
+  The kernel has no TUN device → Tailscale runs in userspace mode (port 8765 is still reachable).
+- "Refusing to reload, not enough space available on /run/systemd": `/run` is small because of the RAM → the setup makes it
+  32MB and keeps it (service `airsense-run-size`). By hand: `sudo mount -o remount,size=32M /run`.
+- "Could not set static hostname": `hostnamectl` does not work here → the name is written directly to `/etc/hostname`.
+- China time (UTC+8) / 1970: the setup asks for the time zone (default **Europe/Athens**) and sets NTP `europe.pool.ntp.org` — change: `airsense clock Europe/Athens`.
+- SocToolKit "No found env or parameter partition item" / "update is not exist in the partition table": you selected `update.img` → select the individual `.img` files.
+
+## Notes about the board
+- **Memory:** the Pro has 128MB (less in practice) → the install makes a **512MB swap** on the card.
+  PDFs take a few seconds longer than on the PC — normal.
+- **Time:** without an RTC battery the time comes from the internet at boot (European NTP pool, automatic).
+- **Password:** everyone knows the factory `luckfox` → change it when asked (or `airsense password`).
+- **Power:** a stable 5V/1A+ charger. Pulling the power suddenly = risk for the card; `sudo poweroff` before you unplug it.
+- **Reset from scratch:** write Ubuntu again (Step 1) and run the install again (Step 3).
+
+---
+---
+
+# 🇬🇷 Ελληνικά
 
 **Developer:** Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM
 
@@ -24,9 +174,9 @@
    [Image Overview and Download](https://wiki.luckfox.com/Luckfox-Pico-RV1106/Getting-Started/overview) ·
    [Image Flashing](https://wiki.luckfox.com/Luckfox-Pico-RV1106/Getting-Started/Image-flashing) — την εικόνα
    **Ubuntu_Luckfox_Pico_Pro_MicroSD** (για Max: **Ubuntu_Luckfox_Pico_Max_MicroSD**) και το **SocToolKit**.
-2. Βάλε την κάρτα στον υπολογιστή, φορμάρισέ τη με το **SD Card Formatter**.
-3. Άνοιξε το **SocToolKit** → διάλεξε **RV1106** → **SD Card Tool** → διάλεξε την κάρτα →
-   φάκελος της εικόνας Ubuntu → **Start create SD card**.
+2. Φόρμαρε την κάρτα σε **FAT32** (όχι exFAT· κάρτα >32GB: με το **Rufus** → File system FAT32).
+3. Άνοιξε το **SocToolKit** → **RV1106** → **SDBoot** (όχι SD upgrade) → διάλεξε την κάρτα →
+   φόρτωσε τα **ξεχωριστά `.img`** του φακέλου Ubuntu (**όχι** το `update.img`) → **Start create SD card**.
 4. Βάλε την κάρτα στην πλακέτα, σύνδεσε **Ethernet** και μετά **ρεύμα**. Περίμενε **1–2 λεπτά**.
 
 > Αν μετά από 2 λεπτά δεν φαίνεται στο δίκτυο ή απαντά το παλιό σύστημα (Buildroot, χρήστης root):
