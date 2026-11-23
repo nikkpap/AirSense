@@ -156,10 +156,24 @@ jobs:
           - `AirSense_vX.pyw` — Windows: διπλό κλικ (εγκαθιστά μόνο του ό,τι χρειάζεται).
           - `AirSense-Pi_vX.zip` — Raspberry Pi (Zero 2 W/3/4/5) server — μία εντολή: `wget -qO get.sh https://raw.githubusercontent.com/nikkpap/AirSense/main/get.sh && sudo bash get.sh`
           - `AirSense-Luckfox_vX.zip` — Luckfox Pico Pro/Max (Ubuntu) server — η ίδια εντολή (βρίσκει μόνη της την πλακέτα).
-          - `AirSense-Android_vX(-debug).apk` — εφαρμογή Android.
+          - `AirSense-Android_vX.apk` — εφαρμογή Android (υπογεγραμμένη).
 
           Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM
           EOF
+          ls -la dist
+
+      - name: Signed APK → drop the -debug APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG=${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v{0}', needs.desktop-pi.outputs.version) }}
+          if ls dist/AirSense-Android_v*.apk 2>/dev/null | grep -qv -- '-debug'; then
+            rm -f dist/*-debug.apk
+            # also from the release, if an earlier run uploaded one
+            gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json assets -q '.assets[].name' 2>/dev/null | grep -- '-debug\.apk$' | while read -r A; do
+              gh release delete-asset "$TAG" "$A" -R "$GITHUB_REPOSITORY" -y && echo "✔ removed $A"
+            done
+          fi
           ls -la dist
 
       - uses: softprops/action-gh-release@v2
