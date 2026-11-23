@@ -145,6 +145,32 @@ Other ways in, from the surest:
 3. **ssh over Tailscale:** `ssh pico@airsense` → `airsense status` shows the local IP.
 4. **USB-C cable to the PC (Luckfox):** `ssh pico@172.32.0.70` — see *SSH over USB* below.
 
+## 📡 Move the BleBox sensor to another WiFi (e.g. the office)
+The sensor remembers only the WiFi it was set up on. It does **not** reset by itself: it keeps trying the saved WiFi, and its own
+access point **`humiditySensor-xxxxxxxxxx`** (xxxxxxxxxx = serial number) normally stays on — that is the "door" for the settings.
+Changing the WiFi keeps the same sensor **ID** → the server finds it again and the history continues on the same sensor.
+
+**A) At the new place — PC app: 📡 Sensors → «🧙 New sensor (WiFi setup)»** (Windows PC with WiFi)
+1. Sensor on power; open `AirSense_vX.pyw`.
+2. The wizard scans the WiFi around and shows the sensors' networks in **green** (`humiditySensor-…`).
+3. Connect → the PC joins the sensor's WiFi by itself (`192.168.4.1`) — the PC internet drops for a moment, that is normal.
+4. Give it the **office WiFi** + password → the sensor connects, the PC goes back to its own WiFi, and the wizard finds the sensor on the network.
+   No WiFi list on Windows? The wizard asks you to turn on **Location** (it has a button that opens it).
+
+**B) Before you leave — PC app: «🔁 Move sensor to another WiFi» → «A · The sensor works now»**
+While the sensor still works at home, **type** the office WiFi name (exactly, case-sensitive) and password. It disappears at home and
+joins the office WiFi as soon as it gets power there — nothing to do on site. A typo → use way A at the office.
+
+**C) Phone:** connect the phone to `humiditySensor-xxxx` → **wBox** app (BleBox) → WiFi settings → office WiFi.
+
+**Then the server (Luckfox / Raspberry Pi):** the known sensor stops answering at the old IP → after 3 failed readings the server **scans the
+network**, finds the same sensor by its **ID** and keeps the new IP (the first time almost at once, then at most every 30 min).
+Faster: find the sensor's IP (router / Fing) → `airsense add NEW_IP`. Check: `airsense status` → *Sensors* online, green ● on the page.
+
+> ⚠ If the sensor's **Access point** was switched **OFF** (BleBox setting) and it cannot reach its WiFi, the access point cannot be turned on
+> again — only a **factory reset** (button, see the BleBox manual). Before moving it, check in wBox that *Access point* is **ON**.
+> The Luckfox has no WiFi, so the sensor's WiFi is always set from the PC app or wBox — never from the board.
+
 ## 🔌 SSH over USB (Luckfox Pico)
 With the Ubuntu image the board shows up on the PC as a network card over USB (RNDIS) with a fixed IP **172.32.0.70**
 ([Luckfox wiki](https://wiki.luckfox.com/Luckfox-Pico/SSH-Telnet-Login)) — handy with no network or an unknown IP.
@@ -374,6 +400,32 @@ Ethernet + ρεύμα και περίμενε **1–2 λεπτά** (IP από DH
 2. **Βρες την IP:** σελίδα του router ή Fing / Angry IP Scanner → `http://IP:8765`.
 3. **ssh μέσω Tailscale:** `ssh pico@airsense` → `airsense status` δείχνει την τοπική IP.
 4. **Καλώδιο USB-C στο PC (Luckfox):** `ssh pico@172.32.0.70` — δες *SSH μέσω USB* παρακάτω.
+
+## 📡 Μεταφορά του αισθητήρα BleBox σε άλλο WiFi (π.χ. γραφείο)
+Ο αισθητήρας θυμάται μόνο το WiFi στο οποίο ρυθμίστηκε. **Δεν** κάνει reset μόνος του: συνεχίζει να ψάχνει το αποθηκευμένο WiFi, και το δικό του
+access point **`humiditySensor-xxxxxxxxxx`** (xxxxxxxxxx = σειριακός αριθμός) κανονικά μένει ανοιχτό — αυτή είναι η «πόρτα» για τις ρυθμίσεις.
+Η αλλαγή WiFi κρατά το ίδιο **ID** → ο server τον ξαναβρίσκει και το ιστορικό συνεχίζει στον ίδιο αισθητήρα.
+
+**Α) Στο νέο μέρος — εφαρμογή PC: 📡 Αισθητήρες → «🧙 Νέος αισθητήρας (ρύθμιση WiFi)»** (PC Windows με WiFi)
+1. Ο αισθητήρας στο ρεύμα· άνοιξε το `AirSense_vX.pyw`.
+2. Ο οδηγός ψάχνει τα WiFi γύρω και δείχνει με **πράσινο** τα δίκτυα των αισθητήρων (`humiditySensor-…`).
+3. Σύνδεση → το PC μπαίνει μόνο του στο WiFi του αισθητήρα (`192.168.4.1`) — το internet του PC κόβεται για λίγο, φυσιολογικό.
+4. Του δίνεις το **WiFi του γραφείου** + κωδικό → ο αισθητήρας συνδέεται, το PC γυρίζει στο δικό του WiFi και ο οδηγός τον βρίσκει στο δίκτυο.
+   Δεν βλέπεις WiFi στα Windows; Ο οδηγός ζητά **Τοποθεσία** (έχει κουμπί που την ανοίγει).
+
+**Β) Πριν φύγεις — εφαρμογή PC: «🔁 Μεταφορά αισθητήρα σε άλλο WiFi» → «Α · Ο αισθητήρας δουλεύει τώρα»**
+Όσο δουλεύει ακόμα στο σπίτι, **γράφεις** το όνομα του WiFi του γραφείου (ακριβώς, με κεφαλαία/μικρά) και τον κωδικό. Στο σπίτι «χάνεται» και
+στο γραφείο συνδέεται μόλις πάρει ρεύμα — εκεί δεν κάνεις τίποτα. Λάθος γράμμα → τρόπος Α στο γραφείο.
+
+**Γ) Κινητό:** σύνδεση του κινητού στο `humiditySensor-xxxx` → εφαρμογή **wBox** (BleBox) → ρυθμίσεις WiFi → WiFi του γραφείου.
+
+**Μετά ο server (Luckfox / Raspberry Pi):** ο γνωστός αισθητήρας δεν απαντά στην παλιά IP → μετά από 3 αποτυχημένες αναγνώσεις ο server **σαρώνει
+το δίκτυο**, βρίσκει τον ίδιο αισθητήρα από το **ID** του και κρατά τη νέα IP (την πρώτη φορά σχεδόν αμέσως, μετά το πολύ κάθε 30').
+Πιο γρήγορα: βρες την IP του αισθητήρα (router / Fing) → `airsense add ΝΕΑ_IP`. Έλεγχος: `airsense status` → *Sensors* online, πράσινο ● στη σελίδα.
+
+> ⚠ Αν το **Access point** του αισθητήρα έχει κλείσει (**OFF**, ρύθμιση BleBox) και δεν βρίσκει το WiFi του, το access point δεν ξανανοίγει —
+> μόνο **factory reset** (κουμπί, δες το εγχειρίδιο BleBox). Πριν τον μεταφέρεις, έλεγξε στο wBox ότι το *Access point* είναι **ON**.
+> Το Luckfox δεν έχει WiFi, άρα το WiFi του αισθητήρα ρυθμίζεται πάντα από την εφαρμογή PC ή το wBox — όχι από την πλακέτα.
 
 ## 🔌 SSH μέσω USB (Luckfox Pico)
 Με την εικόνα Ubuntu η πλακέτα εμφανίζεται στο PC ως κάρτα δικτύου μέσω USB (RNDIS) με σταθερή IP **172.32.0.70**
