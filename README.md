@@ -149,6 +149,42 @@ Raspberry Pi Zero 2 W: SSH over USB needs extra setup (USB gadget) — use `airs
 - **Tailscale SSH** is turned on automatically: `ssh USER@airsense` from any of your Tailscale devices.
 - In the [admin console](https://login.tailscale.com/admin/machines): machine **airsense** → ⋯ → **Disable key expiry** (so it never asks to log in again).
 
+## 👥 Access for another person (e.g. a colleague in Athens with an Android phone)
+You share **only the airsense machine** through Tailscale — no router ports, and they see nothing else of your network.
+They log in with **their own** Tailscale account (free); they never learn your passwords.
+
+**You (once):**
+1. https://login.tailscale.com/admin/machines → **airsense** → **⋯** → **Share…**
+2. **Copy share link** (or **Share via email**). *Reusable link:* **OFF** = works once, for one person ·
+   **ON** = works for anyone who has it (handy for a group — send it only to people you trust).
+3. Set a **PIN** for the web page: `airsense set-pin 1234` — and give it to them.
+4. Send them the address: `airsense qr` → screenshot of the **🌍 Tailscale** QR, or `http://100.x.x.x:8765`
+   (the same 100.x address you see — a shared machine keeps it).
+
+**They (on the phone):**
+1. Install **Tailscale** (Play Store) → log in with **their own** account (Google, etc.).
+2. Open the invitation **in Chrome** → **Accept** → **airsense** appears in their Tailscale list → switch Tailscale **ON**.
+3. Install the **AirSense APK** from [Releases](https://github.com/nikkpap/AirSense/releases/latest) (allow "unknown sources" once).
+4. AirSense → **Add server** → scan the QR or type `http://100.x.x.x:8765` (with `http://` and `:8765`) → PIN.
+
+Works from anywhere (4G, any WiFi) while their Tailscale is ON. Remove someone any time: admin → airsense → Share → remove.
+The **admin password** (`airsense set-admin`) stays yours — only the admin changes settings.
+
+**How many people at the same time?** No limit — the server answers everyone in parallel and nobody "takes a seat".
+Rough estimate (not measured) on a Luckfox Pico Pro (128MB): viewing values / charts — easily **10–20 people** at once
+(the sensors are read once by the board and everyone gets the same values); **PDF reports** are the heavy part —
+2–3 at the same moment just take a few seconds longer. Tailscale on the Luckfox runs in userspace mode (a bit slower, not noticeable for pages).
+Sharing has no practical limit on the free plan. If it feels slow, `airsense status` shows RAM/swap; a swap that is always full means
+the board is too small → a **Luckfox Pico Max** (256MB) or **Raspberry Pi Zero 2 W** (512MB) runs the same setup with the same command.
+
+**"Failed to accept invitation"** — usually one of these:
+1. Opened inside **Viber / Messenger / WhatsApp** (their small built-in browser breaks the login) → long-press the link → **Copy** → paste in **Chrome**.
+2. **Not logged in** to Tailscale yet → first open the Tailscale app (or login.tailscale.com) and create the account, **then** open the link in Chrome.
+3. Logged in with **your** account (or you are testing it on your own phone) → you cannot share with yourself; it must be **another** account.
+4. The link **expired / was cancelled** → Share → **Copy share link** again and resend it.
+5. **Company account** → its admin may block accepting shared machines → try a personal Gmail.
+Surest way: **Share via email** to their Gmail → they open it from the Gmail app into Chrome.
+
 ## 📶 WiFi (Raspberry Pi)
 - `airsense wifi` — menu: scan, add, saved networks, priority, hidden network.
 - **Without ssh:** put the SD card in a PC → on the boot partition copy `airsense-wifi.example.txt` as **`airsense-wifi.txt`** →
@@ -324,6 +360,42 @@ Raspberry Pi Zero 2 W: το SSH μέσω USB θέλει ειδική ρύθμι�
 - Στο κινητό: εφαρμογή **Tailscale** με τον **ίδιο λογαριασμό** → `http://100.x.x.x:8765`.
 - **Tailscale SSH** ανοίγει αυτόματα: `ssh ΧΡΗΣΤΗΣ@airsense` από κάθε συσκευή σου στο Tailscale.
 - Στο [admin](https://login.tailscale.com/admin/machines): μηχάνημα **airsense** → ⋯ → **Disable key expiry** (να μη ζητά ξανά login κάθε 6 μήνες).
+
+## 👥 Πρόσβαση για άλλον (π.χ. συνάδελφος στην Αθήνα με Android)
+Μοιράζεσαι **μόνο το μηχάνημα airsense** μέσω Tailscale — χωρίς πόρτες στο router, και δεν βλέπει τίποτε άλλο από το δίκτυό σου.
+Μπαίνει με τον **δικό του** λογαριασμό Tailscale (δωρεάν)· τους δικούς σου κωδικούς δεν τους μαθαίνει ποτέ.
+
+**Εσύ (μία φορά):**
+1. https://login.tailscale.com/admin/machines → **airsense** → **⋯** → **Share…**
+2. **Copy share link** (ή **Share via email**). *Reusable link:* **OFF** = δουλεύει μία φορά, για ένα άτομο ·
+   **ON** = δουλεύει για όποιον τον έχει (βολικό για ομάδα — στείλ' τον μόνο σε άτομα που εμπιστεύεσαι).
+3. **PIN** στη σελίδα: `airsense set-pin 1234` — και του το δίνεις.
+4. Στείλε τη διεύθυνση: `airsense qr` → screenshot του **🌍 Tailscale** QR, ή `http://100.x.x.x:8765`
+   (η ίδια 100.x που βλέπεις κι εσύ — το κοινόχρηστο μηχάνημα την κρατά).
+
+**Αυτός (στο κινητό):**
+1. Εγκαθιστά το **Tailscale** (Play Store) → login με τον **δικό του** λογαριασμό (Google κ.λπ.).
+2. Ανοίγει την πρόσκληση **στο Chrome** → **Accept** → εμφανίζεται το **airsense** στη λίστα του → Tailscale **ON**.
+3. Εγκαθιστά το **AirSense APK** από τα [Releases](https://github.com/nikkpap/AirSense/releases/latest) (μία φορά «άγνωστες πηγές»).
+4. AirSense → **Προσθήκη server** → σκανάρει το QR ή γράφει `http://100.x.x.x:8765` (με `http://` και `:8765`) → PIN.
+
+Δουλεύει από παντού (4G, κάθε WiFi) όσο το Tailscale του είναι ON. Αφαίρεση όποτε θες: admin → airsense → Share → αφαίρεση.
+Ο **κωδικός διαχειριστή** (`airsense set-admin`) μένει δικός σου — μόνο ο διαχειριστής αλλάζει ρυθμίσεις.
+
+**Πόσα άτομα ταυτόχρονα;** Δεν υπάρχει όριο — ο server εξυπηρετεί όλους παράλληλα (κάθε άτομο σε δικό του νήμα), κανείς δεν «πιάνει θέση».
+Εκτίμηση (δεν έχει μετρηθεί) σε Luckfox Pico Pro (128MB): προβολή τιμών / γραφημάτων — άνετα **10–20 άτομα** μαζί
+(οι αισθητήρες διαβάζονται μία φορά από την πλακέτα και όλοι παίρνουν τις ίδιες έτοιμες τιμές)· η **αναφορά PDF** είναι το πιο «βαρύ» —
+2–3 μαζί απλά αργούν λίγα δευτερόλεπτα παραπάνω. Το Tailscale στο Luckfox τρέχει σε userspace mode (λίγο πιο αργό, δεν φαίνεται στις σελίδες).
+Η κοινοποίηση δεν έχει πρακτικό όριο στο δωρεάν πλάνο. Αν το νιώσεις αργό, το `airsense status` δείχνει RAM/swap· αν η swap γεμίζει
+συνέχεια, η πλακέτα δεν φτάνει → ένα **Luckfox Pico Max** (256MB) ή **Raspberry Pi Zero 2 W** (512MB) τρέχει το ίδιο setup με την ίδια εντολή.
+
+**«Failed to accept invitation»** — συνήθως ένα από αυτά:
+1. Τον άνοιξε μέσα από **Viber / Messenger / WhatsApp** (ο μικρός browser τους χαλάει το login) → πατημένο στον σύνδεσμο → **Αντιγραφή** → επικόλληση στο **Chrome**.
+2. **Δεν έχει κάνει login** στο Tailscale → πρώτα η εφαρμογή Tailscale (ή login.tailscale.com) και λογαριασμός, **μετά** ο σύνδεσμος στο Chrome.
+3. Είναι μπασμένος με τον **δικό σου** λογαριασμό (ή τον δοκιμάζεις εσύ στο κινητό σου) → δεν μοιράζεσαι με τον εαυτό σου· πρέπει **άλλος** λογαριασμός.
+4. Ο σύνδεσμος **έληξε / ακυρώθηκε** → Share → **Copy share link** ξανά και νέα αποστολή.
+5. **Εταιρικός λογαριασμός** → ο διαχειριστής εκεί μπορεί να έχει κλείσει την αποδοχή κοινόχρηστων μηχανημάτων → δοκιμή με προσωπικό Gmail.
+Πιο σίγουρα: **Share via email** στο Gmail του → το ανοίγει από την εφαρμογή Gmail στο Chrome.
 
 ## ⚙ airsense-settings.txt (προαιρετικό)
 Στον φάκελο του χρήστη (ή στο boot partition της κάρτας / USB). Εφαρμόζεται στο επόμενο boot, μόνο όταν αλλάξει:
