@@ -41,17 +41,27 @@
 ### ⭐ Πιο εύκολα: μία εντολή (κατεβάζει πάντα την τελευταία έκδοση)
 Μπες με ssh (`ssh pico@IP`, κωδικός `luckfox` — ή με PuTTY/MobaXterm) και γράψε:
 ```bash
-wget -qO get.sh https://raw.githubusercontent.com/nikkpap/AirSense/main/luckfox/get.sh && sudo bash get.sh
+wget -qO get.sh https://raw.githubusercontent.com/nikkpap/AirSense/main/get.sh && sudo bash get.sh
 ```
-Οι ερωτήσεις είναι **Y/N** — πάτα **Enter** για την προεπιλογή (Y). Όλα τα υπόλοιπα γίνονται μόνα τους:
-swap, πακέτα, `/run` 32MB (λίγη RAM), όνομα **airsense**, υπηρεσία εκκίνησης, Tailscale, και στο τέλος επανεκκίνηση για έλεγχο.
+(Η παλιά διεύθυνση `…/main/luckfox/get.sh` δουλεύει κι αυτή — ίδιο αρχείο.)
+
+**Όλες οι ερωτήσεις έρχονται μαζί στο Step 1/6** — μετά τρέχει μόνο του:
+- **Ζώνη ώρας** από λίστα με τη διαφορά UTC (`1) Europe/Athens UTC+02:00 ← suggested`) → **Enter**
+- όνομα **airsense** (Y) · σταθερή MAC (Y) · **Tailscale** (Y = από παντού, N = μόνο τοπικά)
+
+Μετά μόνα τους: **ρολόι** (ζώνη + NTP `europe.pool.ntp.org`, συγχρονίζει **πριν** το apt — η πλακέτα δεν έχει μπαταρία ρολογιού),
+swap, πακέτα, `/run` 32MB (λίγη RAM), υπηρεσίες, server, Tailscale + Tailscale SSH, και στο τέλος επανεκκίνηση για έλεγχο.
+
+**Μετά το reboot:** `ssh pico@airsense.local` → επειδή ο κωδικός είναι ακόμα ο εργοστασιακός **luckfox**, σε ρωτά
+«Change it now? (Y/n)» → **Enter** → γράφεις τον τωρινό (`luckfox`) και μετά τον **νέο** δύο φορές.
+Αν και ο **root** έχει εργοστασιακό κωδικό, ρωτά και γι' αυτόν. Οποτεδήποτε: `airsense password`.
 Την ίδια εντολή τρέχεις και για **ενημέρωση** σε νέα έκδοση.
 
 ### Από Windows (χωρίς internet στην πλακέτα για το κατέβασμα)
 1. Αποσυμπίεσε το **AirSense-Luckfox_vX.zip** σε έναν φάκελο.
 2. (Προαιρετικά) άνοιξε το **airsense-settings.txt** και γράψε κωδικό διαχειριστή, IP αισθητήρα, πόλη.
 3. Διπλό κλικ στο **install_from_windows.bat** → γράψε την **IP** → κωδικός **luckfox** (2 φορές).
-4. Στις ερωτήσεις **Y/N**: **Enter** = ναι. Στο «Θέλεις Tailscale;» → **Y** (από παντού) ή **N** (μόνο τοπικά).
+4. Στις ερωτήσεις (όλες στην αρχή): **Enter** = προεπιλογή. Στο Tailscale → **Y** (από παντού) ή **N** (μόνο τοπικά).
 
 ### Ή χειροκίνητα με scp
 ```bash
@@ -69,8 +79,8 @@ sudo bash ~/airsense-setup/airsense-setup.sh
 1. **Ψάχνει** το `AirSense*.py` / `AirSense_vX.pyw` στη ρίζα της κάρτας, στο `/home/pico` και σε **USB στικάκι**.
    Αν βρει **νεότερη έκδοση**, την εγκαθιστά μόνη της.
 2. Εφαρμόζει το **airsense-settings.txt** (αν άλλαξε).
-3. Ελέγχει/εγκαθιστά ό,τι λείπει (python3, reportlab για PDF, γραμματοσειρές).
-4. Περιμένει να πάρει σωστή ώρα από το internet.
+3. Περιμένει να πάρει σωστή ώρα από το internet (NTP pool της Ευρώπης).
+4. Ελέγχει/εγκαθιστά ό,τι λείπει (python3, reportlab για PDF, γραμματοσειρές) · ελέγχει αν ο κωδικός είναι ακόμα εργοστασιακός.
 5. **Tailscale:** αν υπάρχει το **`tailscale.sh`** → το τρέχει (ON) · αν **δεν υπάρχει** → μόνο τοπικά (OFF).
 6. Ξεκινά τον server — αν κάποτε κλείσει, ξανανοίγει μόνος του.
 
@@ -109,7 +119,10 @@ sudo bash ~/airsense-setup/airsense-setup.sh
 | `airsense qr` | QR για το κινητό |
 | `airsense logs` / `airsense live` | μηνύματα / ζωντανά |
 | `airsense restart` | επανεκκίνηση server |
-| `airsense update` | ψάχνει νέο `.pyw` τώρα |
+| `airsense update` | έλεγχος GitHub + ενημέρωση τώρα |
+| `airsense password` | αλλαγή κωδικού (και root) |
+| `airsense clock [Europe/Athens]` | ρολόι, ζώνη ώρας, NTP |
+| `airsense mac` | MAC για κράτηση IP στο router |
 | `airsense set-admin` | κωδικός διαχειριστή |
 | `airsense set-pin 1234` | PIN για τη web σελίδα |
 | `airsense add 192.168.1.241` | προσθήκη αισθητήρα |
@@ -124,11 +137,12 @@ sudo bash ~/airsense-setup/airsense-setup.sh
 - «Refusing to reload, not enough space available on /run/systemd»: το `/run` είναι μικρό λόγω RAM → το setup το κάνει
   32MB και το κρατά μόνιμα (υπηρεσία `airsense-run-size`). Χειροκίνητα: `sudo mount -o remount,size=32M /run`.
 - «Could not set static hostname»: το `hostnamectl` δεν δουλεύει εδώ → το όνομα γράφεται απευθείας στο `/etc/hostname`.
-- Ώρα Κίνας (UTC+8): το setup βάζει ζώνη **Europe/Athens**.
+- Ώρα Κίνας (UTC+8) / 1970: το setup ρωτά ζώνη ώρας (προεπιλογή **Europe/Athens**) και βάζει NTP `europe.pool.ntp.org` — αλλαγή: `airsense clock Europe/Athens`.
 
 ## Σημειώσεις για την πλακέτα
 - **Μνήμη:** η Pro έχει 128MB (λιγότερα στην πράξη) → η εγκατάσταση φτιάχνει **swap 512MB** στην κάρτα.
   Τα PDF βγαίνουν σε λίγα δευτερόλεπτα παραπάνω από τον υπολογιστή — φυσιολογικό.
-- **Ώρα:** χωρίς μπαταρία RTC η ώρα έρχεται από το internet στην εκκίνηση (γίνεται αυτόματα, ζώνη Europe/Athens).
+- **Ώρα:** χωρίς μπαταρία RTC η ώρα έρχεται από το internet στην εκκίνηση (NTP pool Ευρώπης, αυτόματα).
+- **Κωδικός:** ο εργοστασιακός `luckfox` τον ξέρουν όλοι → άλλαξέ τον όταν σε ρωτήσει (ή `airsense password`).
 - **Ρεύμα:** σταθερός φορτιστής 5V/1A+. Απότομο κόψιμο ρεύματος = κίνδυνος για την κάρτα· `sudo poweroff` πριν το βγάλεις.
 - **Reset από την αρχή:** ξαναγράφεις το Ubuntu (Βήμα 1) και ξανατρέχεις το install (Βήμα 3).

@@ -17,7 +17,7 @@ AUTHKEY=${AIRSENSE_TS_AUTHKEY:-$AUTHKEY}     # (the boot service / airsense comm
 LOGIN_FILE=/var/lib/airsense/tailscale-login.txt
 [ "$(id -u)" = 0 ] || exec sudo bash "$0" "$@"
 mkdir -p /var/lib/airsense
-mount -o remount,size=32M /run 2>/dev/null
+[ "$(df -m --output=size /run 2>/dev/null | tail -1 | tr -d ' ')" -lt 32 ] 2>/dev/null && mount -o remount,size=32M /run 2>/dev/null
 
 # Live progress: moving bar + elapsed time + what it is doing right now
 PROG_LOG=/tmp/tailscale-install.log
@@ -105,7 +105,7 @@ if ! command -v tailscale >/dev/null || ! command -v tailscaled >/dev/null; then
   fi
 fi
 
-# This board's kernel may have no TUN device → run Tailscale in userspace mode (still reaches port 8765)
+# Luckfox: the kernel has no TUN device → run Tailscale in userspace mode (still reaches port 8765)
 need_userspace() { [ -c /dev/net/tun ] && return 1; modprobe tun 2>/dev/null; [ -c /dev/net/tun ] && return 1; return 0; }
 if need_userspace; then
   if ! grep -q "userspace-networking" /etc/default/tailscaled 2>/dev/null; then
@@ -122,13 +122,13 @@ progress "Starting Tailscale" bash -c 'systemctl enable tailscaled; systemctl re
 progress "Waiting for Tailscale" wait_daemon || {
   echo "  ✖ tailscaled does not start:"; systemctl status tailscaled --no-pager 2>&1 | tail -n 6 | sed 's/^/     /'; exit 1; }
 
-# Tailscale SSH: log in to this board from any of your Tailscale devices ("ssh pico@NAME"),
+# Tailscale SSH: log in to this board from any of your Tailscale devices ("ssh USER@NAME"),
 # no password, no open ports. Set TAILSCALE_SSH=off in airsense-settings.txt to keep it off.
 enable_ssh() {
   if grep -qiE '^[[:space:]]*TAILSCALE_SSH[[:space:]]*=[[:space:]]*(off|no|0)' /var/lib/airsense/settings.applied 2>/dev/null; then
     tailscale set --ssh=false >/dev/null 2>&1; echo "  ℹ Tailscale SSH: OFF (TAILSCALE_SSH=off)"; return 0
   fi
-  if tailscale set --ssh >/dev/null 2>&1; then echo "  ✔ Tailscale SSH: ON  →  ssh pico@$(hostname)  (from any device on your Tailscale)"
+  if tailscale set --ssh >/dev/null 2>&1; then echo "  ✔ Tailscale SSH: ON  →  ssh $(cat /var/lib/airsense/user 2>/dev/null || echo user)@$(hostname)  (from any device on your Tailscale)"
   else echo "  ⚠ Tailscale SSH could not be enabled (run: sudo tailscale set --ssh)"; fi
 }
 connected() {

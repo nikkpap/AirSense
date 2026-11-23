@@ -1,10 +1,10 @@
 #!/bin/bash
-# AirSense — commands for Luckfox Pico (Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM)
+# AirSense — commands for Raspberry Pi · Luckfox Pico · Debian/Ubuntu (Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM)
 APP=/opt/airsense/AirSense.py
 DATA=/var/lib/airsense
-U=$(cat /var/lib/airsense/user 2>/dev/null); U=${U:-${SUDO_USER:-$(logname 2>/dev/null || echo pico)}}
-UH=$(getent passwd "$U" | cut -d: -f6); UH=${UH:-/home/pico}
-[ -d "$UH" ] || UH=/home/pico
+U=$(cat /var/lib/airsense/user 2>/dev/null); [ -n "$U" ] || U=$(getent passwd 1000 | cut -d: -f1); U=${U:-root}
+UH=$(getent passwd "$U" | cut -d: -f6); [ -d "$UH" ] || UH=$HOME
+BOARD=$(cat /var/lib/airsense/board 2>/dev/null); MODEL=$(cat /var/lib/airsense/model 2>/dev/null)
 app() { sudo python3 "$APP" --data "$DATA" "$@"; }
 ip_() { hostname -I | awk '{print $1}'; }
 case "${1:-status}" in
@@ -18,6 +18,7 @@ case "${1:-status}" in
     PROBLEMS=0
     VER=$(grep -m1 -oP '^APP_VERSION = "\K[^"]+' $APP 2>/dev/null)
     printf "${B}🌬 AirSense v%s${N}  ·  %s  ·  up %s\n" "${VER:-?}" "$(hostname)" "$(uptime -p 2>/dev/null | sed 's/^up //')"
+    printf "${D}   %s · %s${N}\n" "${MODEL:-?}" "$(. /etc/os-release 2>/dev/null; echo "$PRETTY_NAME")"
 
     sec "Server"
     if systemctl is-active --quiet airsense-boot; then okk "service" "airsense-boot running (since $(systemctl show -p ActiveEnterTimestamp --value airsense-boot | cut -d' ' -f2-3))"
@@ -39,13 +40,19 @@ case "${1:-status}" in
     if [ -f /etc/systemd/network/10-airsense-mac.link ]; then
       MACFIX=$(grep -m1 '^MACAddress=' /etc/systemd/network/10-airsense-mac.link | cut -d= -f2)
       [ "$MACNOW" = "$MACFIX" ] && okk "MAC" "$MACNOW (fixed — same IP every boot)" || wrn "MAC" "$MACNOW (fixed $MACFIX after the next reboot)"
+    elif [ -n "$MACNOW" ] && [ $(( 0x${MACNOW:0:2} & 2 )) -eq 0 ]; then okk "MAC" "$MACNOW (hardware — same IP every boot)"
     else wrn "MAC" "$MACNOW (random each boot → IP may change)"; fi
+    if command -v nmcli >/dev/null; then
+      W=$(nmcli -t -f ACTIVE,SSID,SIGNAL dev wifi 2>/dev/null | awk -F: '$1=="yes"{print $2" ("$3"%)"; exit}')
+      [ -n "$W" ] && okk "WiFi" "$W · saved: $(nmcli -t -f TYPE connection show 2>/dev/null | grep -c wireless) · airsense wifi"
+    fi
     [ -n "$GW" ] && { ping -c1 -W2 "$GW" >/dev/null 2>&1 && okk "router" "$GW reachable" || bad "router" "$GW not reachable"; } || bad "router" "no default route"
     if timeout 5 bash -c 'exec 3<>/dev/tcp/1.1.1.1/443' 2>/dev/null; then
       getent hosts github.com >/dev/null 2>&1 && okk "internet" "OK (DNS OK)" || bad "internet" "online but DNS fails"
     else bad "internet" "no internet"; fi
-    if [ "$(timedatectl show -p NTPSynchronized --value 2>/dev/null)" = yes ]; then okk "clock" "$(date '+%F %T %Z') (synced)"
-    else wrn "clock" "$(date '+%F %T %Z') (NOT synced yet)"; fi
+    NTPS=$(cat $DATA/ntp.txt 2>/dev/null); TZN=$(timedatectl show -p Timezone --value 2>/dev/null)
+    if [ "$(timedatectl show -p NTPSynchronized --value 2>/dev/null)" = yes ]; then okk "clock" "$(date '+%F %T') $TZN UTC$(date +%:z) (synced${NTPS:+ · $NTPS})"
+    else wrn "clock" "$(date '+%F %T') $TZN UTC$(date +%:z) (NOT synced yet${NTPS:+ · $NTPS}) → airsense clock"; fi
 
     sec "Tailscale"
     if ! command -v tailscale >/dev/null; then
@@ -76,6 +83,8 @@ case "${1:-status}" in
     [ "${DP:-0}" -lt 90 ] && okk "SD card" "$DU" || bad "SD card" "$DU (almost full!)"
     RF=$(df -m /run | awk 'NR==2{print $4}'); [ "${RF:-0}" -ge 16 ] && okk "/run" "${RF}MB free" || bad "/run" "${RF}MB free (<16MB) → sudo mount -o remount,size=32M /run"
     T=$(cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null); [ -n "$T" ] && { [ $((T/1000)) -lt 75 ] && okk "CPU temp" "$((T/1000))°C" || wrn "CPU temp" "$((T/1000))°C (hot)"; }
+    if [ -f "$UH/.airsense-default-password" ]; then wrn "password" "factory default ($(tr '\n' ' ' < "$UH/.airsense-default-password" | sed "s/user/$U/")) → airsense password"
+    else okk "password" "changed (not the factory default)"; fi
     DBS=$(du -h $DATA/*.db 2>/dev/null | awk '{s=s $1" "} END{print s}'); [ -n "$DBS" ] && okk "database" "$DBS($DATA)"
 
     sec "Last messages"
@@ -100,6 +109,24 @@ case "${1:-status}" in
       *)   [ -f $DATA/autoupdate.off ] && echo "Auto-update: OFF" || echo "Auto-update: ON"
            systemctl list-timers airsense-update.timer --no-pager 2>/dev/null | head -2; sudo tail -n 5 $DATA/update.log 2>/dev/null ;;
     esac ;;
+  wifi)     if [ -x /usr/local/bin/airsense-wifi ]; then shift; sudo /usr/local/bin/airsense-wifi "$@"
+            else echo "WiFi tool: Raspberry Pi (NetworkManager) only — this board uses Ethernet"; fi ;;
+  password|passwd)
+            echo "🔑 Change the password of «$(id -un)» (current first, then the new one twice):"
+            passwd && sudo /usr/local/sbin/airsense-pwcheck -v
+            if [ -f "$UH/.airsense-default-password" ] && grep -q '^root$' "$UH/.airsense-default-password"; then
+              read -r -p "The root password is also the factory default — change it? (Y/n): " a
+              case "$a" in n|N) ;; *) sudo passwd root && sudo /usr/local/sbin/airsense-pwcheck -v ;; esac
+            fi ;;
+  clock|time)
+            if [ -n "${2:-}" ]; then
+              [ -f "/usr/share/zoneinfo/$2" ] || { echo "✖ unknown time zone: $2 (list: timedatectl list-timezones)"; exit 1; }
+              sudo timedatectl set-timezone "$2" && echo "✔ Time zone $2 (UTC$(TZ=$2 date +%:z))"
+            fi
+            sudo systemctl restart systemd-timesyncd 2>/dev/null
+            timedatectl status 2>/dev/null | sed 's/^ *//' | grep -E 'Local time|Time zone|synchronized|NTP service'
+            echo "NTP servers: $(grep -h '^NTP=' /etc/systemd/timesyncd.conf.d/*.conf 2>/dev/null | cut -d= -f2)"
+            timedatectl timesync-status 2>/dev/null | grep -E 'Server|Poll|Offset' | sed 's/^ */  /' ;;
   set-admin) app --set-admin ;;
   set-pin)  app --set-pin "${2:-}" ;;
   add)      app --add "$2" ;;
@@ -117,12 +144,18 @@ case "${1:-status}" in
              sudo AIRSENSE_TS_AUTHKEY="$K" bash "$T"
            else echo "Tailscale OFF → airsense tailscale on"; fi ;;
     esac ;;
-  uninstall) sudo systemctl disable --now airsense-boot airsense-update.timer; sudo rm -f /etc/systemd/system/airsense-boot.service /etc/systemd/system/airsense-update.* /usr/local/sbin/airsense-boot /usr/local/sbin/airsense-update
+  uninstall) sudo systemctl disable --now airsense-boot airsense-update.timer airsense-bootwifi airsense-run-size 2>/dev/null
+             sudo rm -f /etc/systemd/system/airsense-boot.service /etc/systemd/system/airsense-update.* /etc/systemd/system/airsense-bootwifi.service \
+               /etc/systemd/system/airsense-run-size.service /usr/local/sbin/airsense-boot /usr/local/sbin/airsense-update /usr/local/sbin/airsense-pwcheck \
+               /etc/profile.d/airsense-password.sh /usr/local/bin/airsense-wifi; sudo systemctl daemon-reload
              sudo rm -rf /opt/airsense; echo "✔ Removed (data is kept in $DATA)"; sudo rm -f /usr/local/bin/airsense ;;
   *) cat <<EOF
 airsense  (= airsense status) full diagnosis: server, sensors, network, Tailscale, updates, system
 airsense qr                  QR codes for the phone
-airsense mac                 fixed network address (MAC) — for a DHCP reservation in the router
+airsense mac                 network address (MAC) — for a DHCP reservation in the router
+airsense wifi                Raspberry Pi WiFi: scan, add, saved networks (menu)
+airsense password            change the login password (and root's, if factory default)
+airsense clock [Zone/City]   clock, time zone, NTP sync (e.g. airsense clock Europe/Athens)
 airsense logs | live         messages / live log
 airsense restart             restart the server
 airsense update              check GitHub + update now

@@ -41,7 +41,10 @@ jobs:
         run: |
           python -m py_compile desktop/AirSense.pyw pi/airsense_wifi.py
           bash -n pi/install_pi.sh
-          for f in luckfox/*.sh luckfox/airsense; do bash -n "$f"; done
+          for f in linux/*.sh linux/airsense; do bash -n "$f"; done
+          sh -n linux/airsense-password.sh
+          # the one-line installer must be the same everywhere
+          cmp linux/get.sh get.sh && cmp linux/get.sh luckfox/get.sh && cmp linux/get.sh pi/get.sh
           # ο headless server (Raspberry Pi) πρέπει να ξεκινά χωρίς εξωτερικές βιβλιοθήκες
           timeout 60 python desktop/AirSense.pyw --help-cli
           timeout 60 python desktop/AirSense.pyw --data "$RUNNER_TEMP/as" --status
@@ -49,17 +52,23 @@ jobs:
       - name: Πακέτα
         run: |
           V=${{ steps.ver.outputs.version }}
-          mkdir -p dist "AirSense-Pi"
+          mkdir -p dist AirSense-Pi AirSense-Luckfox
           cp desktop/AirSense.pyw "dist/AirSense_v$V.pyw"
-          cp pi/install_pi.sh pi/airsense_wifi.py pi/install_from_windows.bat pi/ODIGIES_Raspberry_Pi.md AirSense-Pi/
+          # Raspberry Pi: common Linux scripts + WiFi tool + Pi docs
+          cp linux/* AirSense-Pi/
+          cp pi/airsense_wifi.py pi/install_pi.sh pi/install_from_windows.bat pi/ODIGIES_Raspberry_Pi.md AirSense-Pi/
           cp desktop/AirSense.pyw "AirSense-Pi/AirSense_v$V.pyw"
-          zip -qr "dist/AirSense-Pi_v$V.zip" AirSense-Pi
-          mkdir -p AirSense-Luckfox
-          cp luckfox/* AirSense-Luckfox/
+          # Luckfox: common Linux scripts + Luckfox docs
+          cp linux/* AirSense-Luckfox/
+          cp luckfox/install_from_windows.bat luckfox/ODIGIES_Luckfox.md AirSense-Luckfox/
           cp desktop/AirSense.pyw "AirSense-Luckfox/AirSense_v$V.pyw"
-          chmod 755 AirSense-Luckfox/*.sh AirSense-Luckfox/airsense
+          chmod 755 AirSense-*/*.sh AirSense-*/airsense
+          zip -qr "dist/AirSense-Pi_v$V.zip" AirSense-Pi
           zip -qr "dist/AirSense-Luckfox_v$V.zip" AirSense-Luckfox
-          cp "dist/AirSense-Luckfox_v$V.zip" dist/AirSense-Luckfox.zip   # σταθερό όνομα για το get.sh (latest)
+          # fixed names for get.sh (releases/latest/download/…)
+          cp "dist/AirSense-Pi_v$V.zip" dist/AirSense-Pi.zip
+          cp "dist/AirSense-Luckfox_v$V.zip" dist/AirSense-Luckfox.zip
+          ls -la dist
 
       - uses: actions/upload-artifact@v4
         with:
@@ -145,8 +154,8 @@ jobs:
           ---
           **Αρχεία**
           - `AirSense_vX.pyw` — Windows: διπλό κλικ (εγκαθιστά μόνο του ό,τι χρειάζεται).
-          - `AirSense-Pi_vX.zip` — Raspberry Pi server (δες ODIGIES_Raspberry_Pi.md μέσα).
-          - `AirSense-Luckfox_vX.zip` — Luckfox Pico Pro/Max (Ubuntu) server, αυτόματο στο boot (δες ODIGIES_Luckfox.md).
+          - `AirSense-Pi_vX.zip` — Raspberry Pi (Zero 2 W/3/4/5) server — μία εντολή: `wget -qO get.sh https://raw.githubusercontent.com/nikkpap/AirSense/main/get.sh && sudo bash get.sh`
+          - `AirSense-Luckfox_vX.zip` — Luckfox Pico Pro/Max (Ubuntu) server — η ίδια εντολή (βρίσκει μόνη της την πλακέτα).
           - `AirSense-Android_vX(-debug).apk` — εφαρμογή Android.
 
           Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM

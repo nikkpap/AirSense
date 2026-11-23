@@ -1,6 +1,6 @@
 # ═══════════════════════════════════════════════════════════════
 #  AirSense — settings (optional)
-#  Put it next to AirSense_vX.pyw (e.g. /home/pico or a USB stick).
+#  Put it next to AirSense_vX.pyw (your home folder, SD card boot partition or a USB stick).
 #  Applied on the next boot — only when this file changes.
 #  Leave empty whatever you do not want to change.
 # ═══════════════════════════════════════════════════════════════
@@ -17,13 +17,16 @@ SENSORS=192.168.1.241
 # City for the weather (Open-Meteo)
 CITY=Ptolemaida
 
+# Time zone, e.g. Europe/Athens (empty = the one chosen in the installer · list: timedatectl list-timezones)
+TIMEZONE=
+
 # Device name on the network (→ http://NAME.local:8765)
 HOSTNAME=airsense
 
 # Automatic update from GitHub (on/off) — every 6 hours
 AUTO_UPDATE=on
 
-# Tailscale SSH (ssh pico@airsense from your Tailscale devices, no password): on/off
+# Tailscale SSH (ssh USER@airsense from your Tailscale devices, no password): on/off
 TAILSCALE_SSH=on
 
 # Tailscale ON/OFF is NOT set here: tailscale.sh exists → ON · missing → local only.

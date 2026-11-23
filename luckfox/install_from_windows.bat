@@ -26,7 +26,7 @@ echo.
 echo [1/2] Copying files (password: luckfox)...
 ssh -o StrictHostKeyChecking=accept-new %PIUSER%@%PIHOST% "mkdir -p ~/airsense-setup"
 if errorlevel 1 goto err
-scp "%~dp0airsense-setup.sh" "%~dp0airsense-boot.sh" "%~dp0airsense" "%~dp0tailscale.sh" "%~dp0airsense-update.sh" "%~dp0post-update.sh" "%~dp0airsense-settings.txt" "%APPF%" %PIUSER%@%PIHOST%:airsense-setup/
+scp "%~dp0airsense-setup.sh" "%~dp0airsense-boot.sh" "%~dp0airsense" "%~dp0tailscale.sh" "%~dp0airsense-update.sh" "%~dp0post-update.sh" "%~dp0airsense-pwcheck.sh" "%~dp0airsense-password.sh" "%~dp0airsense-settings.txt" "%APPF%" %PIUSER%@%PIHOST%:airsense-setup/
 if errorlevel 1 goto err
 echo.
 echo [2/2] Installing (password again, for sudo)...

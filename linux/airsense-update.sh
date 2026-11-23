@@ -1,6 +1,6 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════════════════════
-#  AirSense — automatic update from GitHub (Luckfox Pico)
+#  AirSense — automatic update from GitHub (Raspberry Pi · Luckfox Pico · Debian/Ubuntu)
 #  Runs from airsense-update.timer (a few minutes after boot and every 6 hours)
 #  or by hand:  airsense update      (or: sudo airsense-update --force)
 #
@@ -41,18 +41,20 @@ if ! newer "$LATEST" "$CUR"; then
   exit 0
 fi
 
-log "⬇ New version v$LATEST (current v$CUR) — downloading…"
+BOARD=$(cat "$DATA/board" 2>/dev/null)
+case "$BOARD" in luckfox) PKG=AirSense-Luckfox ;; *) PKG=AirSense-Pi ;; esac
+log "⬇ New version v$LATEST (current v$CUR) — downloading $PKG…"
 rm -rf "$TMP"; mkdir -p "$TMP"
 if ! curl -fsSL --max-time 300 -o "$TMP/pkg.zip" \
-     "https://github.com/$REPO/releases/download/v$LATEST/AirSense-Luckfox_v$LATEST.zip"; then
+     "https://github.com/$REPO/releases/download/v$LATEST/${PKG}_v$LATEST.zip"; then
   curl -fsSL --max-time 300 -o "$TMP/pkg.zip" \
-     "https://github.com/$REPO/releases/latest/download/AirSense-Luckfox.zip" \
+     "https://github.com/$REPO/releases/latest/download/$PKG.zip" \
     || { log "✖ Download failed"; exit 1; }
 fi
 command -v unzip >/dev/null || { apt-get install -y -qq unzip >/dev/null 2>&1 || python3 -c 1; }
 if command -v unzip >/dev/null; then unzip -oq "$TMP/pkg.zip" -d "$TMP" || { log "✖ Broken zip"; exit 1; }
 else python3 -m zipfile -e "$TMP/pkg.zip" "$TMP" || { log "✖ Broken zip"; exit 1; }; fi
-P="$TMP/AirSense-Luckfox"
+P=$(ls -d "$TMP"/AirSense-*/ 2>/dev/null | head -1); P=${P%/}
 NEWAPP=$(ls -1 "$P"/AirSense_v*.pyw 2>/dev/null | sort -V | tail -1)
 [ -n "$NEWAPP" ] && python3 -m py_compile "$NEWAPP" 2>/dev/null || { log "✖ The new app failed the check — nothing changed"; exit 1; }
 sed -i 's/\r$//' "$P"/*.sh "$P"/airsense 2>/dev/null
@@ -62,20 +64,21 @@ install -m 755 "$P/airsense-boot.sh"   /usr/local/sbin/airsense-boot
 install -m 755 "$P/airsense-update.sh" /usr/local/sbin/airsense-update
 install -m 755 "$P/airsense"           /usr/local/bin/airsense
 install -D -m 755 "$P/tailscale.sh"    /usr/local/share/airsense/tailscale.sh
+[ -f "$P/airsense-pwcheck.sh" ] && install -m 755 "$P/airsense-pwcheck.sh" /usr/local/sbin/airsense-pwcheck
 # the user's tailscale.sh (exists = ON) — updated, keeping its AUTHKEY
-U=$(cat "$DATA/user" 2>/dev/null); [ -n "$U" ] || U=$(stat -c %U /home/* 2>/dev/null | grep -v root | head -1); UH=$(getent passwd "${U:-pico}" | cut -d: -f6); UH=${UH:-/home/pico}
+U=$(cat "$DATA/user" 2>/dev/null); [ -n "$U" ] || U=$(getent passwd 1000 | cut -d: -f1); U=${U:-root}; UH=$(getent passwd "$U" | cut -d: -f6); UH=${UH:-/root}
 if [ -f "$UH/tailscale.sh" ]; then
   K=$(grep -m1 -oP '^AUTHKEY="\K[^"]*' "$UH/tailscale.sh")
   cp -f "$P/tailscale.sh" "$UH/tailscale.sh"; [ -n "$K" ] && sed -i "s|^AUTHKEY=\"\"|AUTHKEY=\"$K\"|" "$UH/tailscale.sh"
-  chown "${U:-pico}": "$UH/tailscale.sh" 2>/dev/null
+  chown "$U": "$UH/tailscale.sh" 2>/dev/null
 fi
 # optional steps of the new version (e.g. new services)
 [ -f "$P/post-update.sh" ] && bash "$P/post-update.sh" >> "$LOG" 2>&1
 
 # ── the app: in the user's home (the boot service finds it there) ──
 rm -f "$UH"/AirSense_v*.pyw
-cp -f "$NEWAPP" "$UH/"; chown "${U:-pico}": "$UH/$(basename "$NEWAPP")" 2>/dev/null
-mount -o remount,size=32M /run 2>/dev/null
+cp -f "$NEWAPP" "$UH/"; chown "$U": "$UH/$(basename "$NEWAPP")" 2>/dev/null
+[ "$(df -m --output=size /run | tail -1 | tr -d ' ')" -lt 32 ] && mount -o remount,size=32M /run 2>/dev/null
 systemctl daemon-reload 2>/dev/null
 systemctl restart airsense-boot
 sleep 20

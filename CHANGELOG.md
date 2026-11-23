@@ -1,5 +1,22 @@
 # Αλλαγές — AirSense
 
+## v1.6.14 — Raspberry Pi = Luckfox (κοινά scripts) · κωδικός · ρολόι
+- **Raspberry Pi Zero 2 W / 3 / 4 / 5 με τα ίδια scripts του Luckfox** (φάκελος `linux/`): μπάρες `Step X/6`, αγγλικά, Y/n,
+  αυτόματη εκκίνηση, **αυτόματη ενημέρωση από GitHub**, `airsense status`, Tailscale on/off + Tailscale SSH.
+  Η πλακέτα αναγνωρίζεται μόνη της (`/proc/device-tree/model`) — ό,τι είναι μόνο για Luckfox (μεγάλο `/run`, σταθερή MAC) γίνεται μόνο όπου χρειάζεται.
+- **Μία εντολή για όλες τις πλακέτες:** `wget -qO get.sh https://raw.githubusercontent.com/nikkpap/AirSense/main/get.sh && sudo bash get.sh`
+  → κατεβάζει μόνη της `AirSense-Pi.zip` ή `AirSense-Luckfox.zip`.
+- Pi: εργαλείο **WiFi στα αγγλικά** (`airsense wifi`, `airsense-wifi.txt` στην κάρτα SD) ενσωματωμένο στις υπηρεσίες·
+  **μεταφορά από παλιά εγκατάσταση** (υπηρεσία `airsense`/`hygrolink`, δεδομένα `~/airsense-data` → `/var/lib/airsense`).
+- **Εργοστασιακός κωδικός:** αν ο κωδικός είναι ακόμα `luckfox` / `raspberry` κ.λπ., μετά το reboot, στο **πρώτο ssh login**
+  ρωτά «Change it now? (Y/n)» → `passwd` (και για root αν χρειάζεται). Ελέγχεται σε κάθε boot· `airsense password`· ⚠ στο `airsense status`.
+- **Ρολόι:** ζώνη ώρας από **λίστα με UTC offset** (π.χ. `Europe/Athens UTC+02:00`) + **NTP από ntppool.org** της περιοχής
+  (Ευρώπη: `0-3.europe.pool.ntp.org`)· `airsense clock [Ζώνη]`· `TIMEZONE=` στο airsense-settings.txt.
+- **Review σειράς εντολών:** όλες οι ερωτήσεις μαζί στο Step 1 (μετά τρέχει μόνο του)· το ρολόι συγχρονίζει **πριν** το apt
+  (λάθος ημερομηνία = «Release file not valid yet») — το ίδιο και στο boot· Tailscale που ήδη δουλεύει μένει ON· `sync` πριν το reboot·
+  `/run` μόνο μεγαλώνει (ποτέ μίκρεμα σε Pi)· `systemd-networkd-wait-online` μόνο όπου υπάρχει networkd.
+- Νέο γενικό **README** με οδηγίες για Windows / Raspberry Pi / Luckfox / Android, εντολές, Tailscale, προβλήματα.
+
 ## v1.6.13
 - Luckfox: **Tailscale SSH αυτόματα** μόλις συνδεθεί το Tailscale (`ssh pico@airsense` από κάθε συσκευή σου στο Tailscale, χωρίς κωδικό) — στο setup **περιμένει να κάνεις login** (μπάρα, έως 10') πριν τη μεγάλη επανεκκίνηση, και σε κάθε boot το ξαναεπιβεβαιώνει. `TAILSCALE_SSH=off` στο airsense-settings.txt για να μείνει κλειστό. Ctrl+C στο Tailscale = παράλειψη, το setup συνεχίζει.
 

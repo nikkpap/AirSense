@@ -1,6 +1,6 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════════════════════
-#  AirSense — start on boot (Luckfox Pico Pro/Max · Ubuntu)
+#  AirSense — start on boot (Raspberry Pi · Luckfox Pico · Debian/Ubuntu)
 #  Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM
 #
 #  On every boot:
@@ -17,7 +17,8 @@ APP=$APP_DIR/AirSense.py
 DATA=/var/lib/airsense
 SCAN=/run/airsense-scan
 LOG=$DATA/boot.log
-mount -o remount,size=32M /run 2>/dev/null   # low RAM: room for systemd/apt (e.g. Tailscale install)
+# low-RAM boards (Luckfox): room for systemd/apt — only enlarge, never shrink
+[ "$(df -m --output=size /run 2>/dev/null | tail -1 | tr -d ' ')" -lt 32 ] 2>/dev/null && mount -o remount,size=32M /run 2>/dev/null
 mkdir -p "$APP_DIR" "$DATA" "$SCAN"
 exec > >(tee -a "$LOG") 2>&1
 echo "──── $(date '+%F %T') · airsense-boot ────"
@@ -80,6 +81,14 @@ fi
 for mp in "${MOUNTED_TMP[@]}"; do umount "$mp" 2>/dev/null; rmdir "$mp" 2>/dev/null; done
 [ -f "$APP" ] || { sleep 60; exit 1; }
 
+# ── clock first: wait for time sync (apt fails with a wrong date) (the board keeps no time without an RTC battery) ──
+for i in $(seq 1 45); do
+  [ "$(timedatectl show -p NTPSynchronized --value 2>/dev/null)" = "yes" ] && break
+  [ "$(date +%Y)" -ge 2025 ] && [ "$i" -gt 10 ] && break
+  sleep 2
+done
+echo "🕒 $(date '+%F %T %Z')"
+
 # ── 4. dependencies ──────────────────────────────────────────────────────────
 online() { timeout 5 bash -c 'exec 3<>/dev/tcp/deb.debian.org/80' 2>/dev/null || timeout 5 getent hosts ports.ubuntu.com >/dev/null; }
 if ! command -v python3 >/dev/null; then
@@ -93,14 +102,6 @@ if ! python3 -c "import reportlab" 2>/dev/null || [ ! -f /usr/share/fonts/truety
   fi
 fi
 
-# ── clock: wait for time sync (the board keeps no time without an RTC battery) ──
-for i in $(seq 1 45); do
-  [ "$(timedatectl show -p NTPSynchronized --value 2>/dev/null)" = "yes" ] && break
-  [ "$(date +%Y)" -ge 2025 ] && [ "$i" -gt 10 ] && break
-  sleep 2
-done
-echo "🕒 $(date '+%F %T %Z')"
-
 # ── apply settings (once per change of the file) ──
 if [ -f "$DATA/settings.applied" ] && ! cmp -s "$DATA/settings.applied" "$DATA/settings.done" 2>/dev/null; then
   get() { grep -m1 -E "^[[:space:]]*$1[[:space:]]*=" "$DATA/settings.applied" | sed -E "s/^[^=]*=[[:space:]]*//; s/[[:space:]]*$//; s/\r$//"; }
@@ -110,6 +111,10 @@ if [ -f "$DATA/settings.applied" ] && ! cmp -s "$DATA/settings.applied" "$DATA/s
   [ -n "$P" ] && run --set-pin "$P"
   if [ -n "$S" ]; then IFS=', ' read -ra L <<< "$S"; for ip in "${L[@]}"; do [ -n "$ip" ] && run --add "$ip"; done; fi
   [ -n "$C" ] && run --locate "$C"
+  TZN=$(get TIMEZONE)
+  if [ -n "$TZN" ] && [ -f "/usr/share/zoneinfo/$TZN" ] && [ "$TZN" != "$(timedatectl show -p Timezone --value 2>/dev/null)" ]; then
+    timedatectl set-timezone "$TZN" && echo "   time zone: $TZN (UTC$(TZ=$TZN date +%:z))"
+  fi
   if [ -n "$H" ] && [ "$H" != "$(hostname)" ]; then
     O=$(hostname); echo "$H" > /etc/hostname
     if grep -q "^127\.0\.1\.1" /etc/hosts; then sed -i "s/^127\.0\.1\.1.*/127.0.1.1\t$H/" /etc/hosts; else echo -e "127.0.1.1\t$H" >> /etc/hosts; fi
@@ -141,6 +146,9 @@ else
     echo "🏠 Local only (no tailscale.sh)"
   fi
 fi
+
+# ── factory-default password? → you are asked to change it at the next SSH login ──
+[ -x /usr/local/sbin/airsense-pwcheck ] && /usr/local/sbin/airsense-pwcheck
 
 IP=$(hostname -I 2>/dev/null | awk '{print $1}')
 echo "▶ AirSense v$(ver_of "$APP") → http://${IP:-?}:8765"
