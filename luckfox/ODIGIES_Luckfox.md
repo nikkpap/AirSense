@@ -105,7 +105,7 @@ sudo bash ~/airsense-setup/airsense-setup.sh
 ## Χρήσιμες εντολές (μέσω ssh)
 | Εντολή | Τι κάνει |
 |---|---|
-| `airsense` | κατάσταση, διευθύνσεις, μνήμη |
+| `airsense` ή `airsense status` | **πλήρης διάγνωση** (server, αισθητήρες, δίκτυο, Tailscale, ενημερώσεις, σύστημα) με ✔/⚠/✖ |
 | `airsense qr` | QR για το κινητό |
 | `airsense logs` / `airsense live` | μηνύματα / ζωντανά |
 | `airsense restart` | επανεκκίνηση server |

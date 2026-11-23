@@ -8,14 +8,80 @@ UH=$(getent passwd "$U" | cut -d: -f6); UH=${UH:-/home/pico}
 app() { sudo python3 "$APP" --data "$DATA" "$@"; }
 ip_() { hostname -I | awk '{print $1}'; }
 case "${1:-status}" in
-  status)
-    echo "🌬 AirSense v$(grep -m1 -oP '^APP_VERSION = "\K[^"]+' $APP 2>/dev/null) · $(systemctl is-active airsense-boot) · auto-update: $([ -f $DATA/autoupdate.off ] && echo OFF || echo ON)"
-    echo "🏠 http://$(ip_):8765  ·  http://$(hostname).local:8765"
-    if command -v tailscale >/dev/null && tailscale ip -4 >/dev/null 2>&1; then echo "🌍 http://$(tailscale ip -4 | head -1):8765 (Tailscale)"
-    elif [ -f "$UH/tailscale.sh" ]; then echo "🌍 Tailscale: ON but not logged in → airsense tailscale"
-    else echo "🌍 Tailscale: OFF (local only)"; fi
-    free -m | awk '/Mem:/{printf "💾 RAM: %d/%d MB · ", $3, $2} /Swap:/{printf "swap %d/%d MB\n", $3, $2}'
-    app --status 2>/dev/null | tail -n +2 ;;
+  status|doctor|diag)
+    # ── full diagnosis in one screen ──
+    G='\033[1;32m'; Y='\033[1;33m'; R='\033[1;31m'; B='\033[1;36m'; D='\033[2m'; N='\033[0m'
+    okk()  { printf "  ${G}✔${N} %-14s %s\n" "$1" "$2"; }
+    bad()  { printf "  ${R}✖${N} %-14s %s\n" "$1" "$2"; PROBLEMS=$((PROBLEMS+1)); }
+    wrn()  { printf "  ${Y}⚠${N} %-14s %s\n" "$1" "$2"; }
+    sec()  { printf "\n${B}── %s ──${N}\n" "$1"; }
+    PROBLEMS=0
+    VER=$(grep -m1 -oP '^APP_VERSION = "\K[^"]+' $APP 2>/dev/null)
+    printf "${B}🌬 AirSense v%s${N}  ·  %s  ·  up %s\n" "${VER:-?}" "$(hostname)" "$(uptime -p 2>/dev/null | sed 's/^up //')"
+
+    sec "Server"
+    if systemctl is-active --quiet airsense-boot; then okk "service" "airsense-boot running (since $(systemctl show -p ActiveEnterTimestamp --value airsense-boot | cut -d' ' -f2-3))"
+    else bad "service" "airsense-boot is $(systemctl is-active airsense-boot 2>/dev/null) → airsense restart · airsense logs"; fi
+    if timeout 3 bash -c 'exec 3<>/dev/tcp/127.0.0.1/8765' 2>/dev/null; then okk "web :8765" "answering"
+    else bad "web :8765" "not answering → airsense logs"; fi
+    systemctl is-enabled --quiet airsense-boot 2>/dev/null && okk "autostart" "enabled on boot" || bad "autostart" "NOT enabled → sudo systemctl enable airsense-boot"
+    RESTARTS=$(systemctl show -p NRestarts --value airsense-boot 2>/dev/null)
+    [ "${RESTARTS:-0}" -gt 3 ] && wrn "restarts" "$RESTARTS since boot (crashing?) → airsense logs"
+
+    sec "Sensors"
+    app --status 2>/dev/null | tail -n +2 | sed 's/^/  /' || wrn "sensors" "could not read status"
+
+    sec "Network"
+    IP=$(ip_); GW=$(ip route | awk '/^default/{print $3; exit}')
+    [ -n "$IP" ] && okk "local IP" "$IP  →  http://$IP:8765  ·  http://$(hostname).local:8765" || bad "local IP" "no IP (Ethernet cable?)"
+    IFC=$(ip -o link | awk -F': ' '/link\/ether/{print $2; exit}' | cut -d@ -f1)
+    MACNOW=$(cat /sys/class/net/$IFC/address 2>/dev/null)
+    if [ -f /etc/systemd/network/10-airsense-mac.link ]; then
+      MACFIX=$(grep -m1 '^MACAddress=' /etc/systemd/network/10-airsense-mac.link | cut -d= -f2)
+      [ "$MACNOW" = "$MACFIX" ] && okk "MAC" "$MACNOW (fixed — same IP every boot)" || wrn "MAC" "$MACNOW (fixed $MACFIX after the next reboot)"
+    else wrn "MAC" "$MACNOW (random each boot → IP may change)"; fi
+    [ -n "$GW" ] && { ping -c1 -W2 "$GW" >/dev/null 2>&1 && okk "router" "$GW reachable" || bad "router" "$GW not reachable"; } || bad "router" "no default route"
+    if timeout 5 bash -c 'exec 3<>/dev/tcp/1.1.1.1/443' 2>/dev/null; then
+      getent hosts github.com >/dev/null 2>&1 && okk "internet" "OK (DNS OK)" || bad "internet" "online but DNS fails"
+    else bad "internet" "no internet"; fi
+    if [ "$(timedatectl show -p NTPSynchronized --value 2>/dev/null)" = yes ]; then okk "clock" "$(date '+%F %T %Z') (synced)"
+    else wrn "clock" "$(date '+%F %T %Z') (NOT synced yet)"; fi
+
+    sec "Tailscale"
+    if ! command -v tailscale >/dev/null; then
+      [ -f "$UH/tailscale.sh" ] && wrn "tailscale" "ON but not installed yet → airsense tailscale" || okk "tailscale" "OFF (local only) → airsense tailscale on"
+    else
+      TSST=$(tailscale status --json 2>/dev/null | grep -m1 -oE '"BackendState": *"[A-Za-z]+"' | grep -oE '[A-Za-z]+"$' | tr -d '"')
+      systemctl is-active --quiet tailscaled && okk "tailscaled" "running$(grep -q userspace-networking /etc/default/tailscaled 2>/dev/null && echo ' (userspace mode)')" || bad "tailscaled" "not running → airsense tailscale"
+      case "$TSST" in
+        Running)    TIP=$(tailscale ip -4 2>/dev/null | head -1); okk "state" "connected → http://$TIP:8765" ;;
+        NeedsLogin) bad "state" "needs login → airsense tailscale" ;;
+        Stopped)    bad "state" "stopped → airsense tailscale" ;;
+        *)          wrn "state" "${TSST:-unknown}" ;;
+      esac
+      [ -f "$UH/tailscale.sh" ] && okk "on boot" "ON (~/tailscale.sh exists)" || wrn "on boot" "OFF (no ~/tailscale.sh) — Tailscale stops at next boot"
+      systemctl is-active --quiet airsense-tailscale 2>/dev/null && wrn "setup" "Tailscale setup running now (/var/lib/airsense/tailscale.log)"
+    fi
+
+    sec "Updates"
+    [ -f $DATA/autoupdate.off ] && wrn "auto-update" "OFF → airsense autoupdate on" || {
+      systemctl is-enabled --quiet airsense-update.timer 2>/dev/null && okk "auto-update" "ON · next: $(systemctl show -p NextElapseUSecRealtime --value airsense-update.timer 2>/dev/null | cut -d' ' -f2-3)" \
+        || bad "auto-update" "timer not enabled → sudo systemctl enable --now airsense-update.timer"; }
+    LU=$(sudo tail -n 1 $DATA/update.log 2>/dev/null); [ -n "$LU" ] && printf "    ${D}last check: %s${N}\n" "$LU"
+
+    sec "System"
+    read -r MT MU <<<"$(free -m | awk '/Mem:/{print $2, $3}')"; read -r ST SU <<<"$(free -m | awk '/Swap:/{print $2, $3}')"
+    [ "${ST:-0}" -gt 0 ] && okk "memory" "RAM ${MU}/${MT}MB · swap ${SU}/${ST}MB" || wrn "memory" "RAM ${MU}/${MT}MB · NO swap"
+    DU=$(df -h / | awk 'NR==2{print $5" used, "$4" free"}'); DP=$(df / | awk 'NR==2{gsub("%","",$5); print $5}')
+    [ "${DP:-0}" -lt 90 ] && okk "SD card" "$DU" || bad "SD card" "$DU (almost full!)"
+    RF=$(df -m /run | awk 'NR==2{print $4}'); [ "${RF:-0}" -ge 16 ] && okk "/run" "${RF}MB free" || bad "/run" "${RF}MB free (<16MB) → sudo mount -o remount,size=32M /run"
+    T=$(cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null); [ -n "$T" ] && { [ $((T/1000)) -lt 75 ] && okk "CPU temp" "$((T/1000))°C" || wrn "CPU temp" "$((T/1000))°C (hot)"; }
+    DBS=$(du -h $DATA/*.db 2>/dev/null | awk '{s=s $1" "} END{print s}'); [ -n "$DBS" ] && okk "database" "$DBS($DATA)"
+
+    sec "Last messages"
+    sudo tail -n 5 $DATA/boot.log 2>/dev/null | sed 's/^/    /'
+    echo
+    [ $PROBLEMS = 0 ] && printf "${G}✔ All good${N}\n" || printf "${R}✖ %d problem(s) above${N} — details: ${B}airsense logs${N}\n" $PROBLEMS ;;
   qr)       command -v qrencode >/dev/null || sudo apt-get install -y -qq qrencode
             echo "🏠 http://$(ip_):8765"; qrencode -t ANSIUTF8 "http://$(ip_):8765"
             if tailscale ip -4 >/dev/null 2>&1; then T="http://$(tailscale ip -4 | head -1):8765"; echo "🌍 $T"; qrencode -t ANSIUTF8 "$T"; fi ;;
@@ -54,7 +120,7 @@ case "${1:-status}" in
   uninstall) sudo systemctl disable --now airsense-boot airsense-update.timer; sudo rm -f /etc/systemd/system/airsense-boot.service /etc/systemd/system/airsense-update.* /usr/local/sbin/airsense-boot /usr/local/sbin/airsense-update
              sudo rm -rf /opt/airsense; echo "✔ Removed (data is kept in $DATA)"; sudo rm -f /usr/local/bin/airsense ;;
   *) cat <<EOF
-airsense                     status + addresses
+airsense  (= airsense status) full diagnosis: server, sensors, network, Tailscale, updates, system
 airsense qr                  QR codes for the phone
 airsense mac                 fixed network address (MAC) — for a DHCP reservation in the router
 airsense logs | live         messages / live log

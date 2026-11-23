@@ -1,5 +1,8 @@
 # Αλλαγές — AirSense
 
+## v1.6.12
+- Luckfox: **`airsense status`** (ή σκέτο `airsense`, `airsense doctor`) — πλήρης διάγνωση σε μία οθόνη με ✔/⚠/✖ και τι να κάνεις: υπηρεσία & web :8765, αισθητήρες, IP/MAC/router/internet/DNS/ώρα, Tailscale (κατάσταση, IP, userspace, on boot), αυτόματη ενημέρωση, RAM/swap/κάρτα/`/run`/θερμοκρασία CPU, βάση, τελευταία μηνύματα.
+
 ## v1.6.11 — review των scripts του Luckfox
 - **Tailscale χωρίς apt:** εγκατάσταση από το επίσημο στατικό πακέτο (pkgs.tailscale.com, ~30MB) αντί για install.sh + apt —
   γρήγορο και ελαφρύ για 84MB RAM· καθαρίζει μισοτελειωμένες παλιές προσπάθειες (apt/dpkg)· μπάρα με MB που κατέβηκαν.
