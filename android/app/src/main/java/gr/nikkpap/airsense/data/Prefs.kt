@@ -52,6 +52,10 @@ class Prefs(ctx: Context) {
     var lastWxFetch: Long get() = sp.getLong("lastWxFetch", 0L); set(v) = sp.edit().putLong("lastWxFetch", v).apply()
     var cachedWx: String get() = str("cachedWx"); set(v) = putStr("cachedWx", v)
 
+    // ── OTA ──
+    var autoUpdateCheck: Boolean get() = bool("autoUpdateCheck", true); set(v) = putBool("autoUpdateCheck", v)
+    var lastUpdateCheck: Long get() = sp.getLong("lastUpdateCheck", 0L); set(v) = sp.edit().putLong("lastUpdateCheck", v).apply()
+
     fun isActive(k: String) = bool("act_$k", false)
     fun setActive(k: String, v: Boolean) = putBool("act_$k", v)
     fun lastNotified(k: String) = sp.getLong("ln_$k", 0L)

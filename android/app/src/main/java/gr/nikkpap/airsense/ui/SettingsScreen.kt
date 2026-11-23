@@ -8,6 +8,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -40,6 +41,36 @@ fun SettingsScreen(vm: MainViewModel, ui: UiState) {
                 SwitchRow(tr("Δυναμικά χρώματα (Material You)", "Dynamic colors (Material You)"),
                     tr("Χρώματα από την ταπετσαρία σου", "Colors from your wallpaper"), ui.dynamic) { vm.setDynamic(it) }
             }
+        }
+
+        SectionTitle(tr("Ενημερώσεις", "Updates"))
+        HCard {
+            Text(tr("Έκδοση: ", "Version: ") + BuildConfig.VERSION_NAME, fontWeight = FontWeight.Bold)
+            val up = ui.update
+            when {
+                ui.updateProgress != null -> {
+                    val p = ui.updateProgress ?: 0f
+                    Text(tr("Λήψη v${up?.version}…", "Downloading v${up?.version}…"))
+                    Spacer(Modifier.height(6.dp))
+                    if (p >= 0f) LinearProgressIndicator(progress = { p }, modifier = Modifier.fillMaxWidth())
+                    else LinearProgressIndicator(Modifier.fillMaxWidth())
+                }
+                up != null -> {
+                    Text(tr("🆕 Νέα έκδοση: v${up.version}", "🆕 New version: v${up.version}"), color = OkC, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(6.dp))
+                    Button(onClick = { vm.downloadAndInstall() }) { Text(tr("⬇ Λήψη & εγκατάσταση", "⬇ Download & install")) }
+                }
+                ui.updateMsg != null -> Text(ui.updateMsg, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Spacer(Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedButton(onClick = { vm.checkUpdate() }, enabled = !ui.updateChecking && ui.updateProgress == null) {
+                    Text(if (ui.updateChecking) tr("Έλεγχος…", "Checking…") else tr("🔄 Έλεγχος για ενημέρωση", "🔄 Check for updates"))
+                }
+            }
+            SwitchRow(tr("Αυτόματος έλεγχος", "Automatic check"),
+                tr("Στο άνοιγμα της εφαρμογής, το πολύ κάθε 12 ώρες (GitHub Releases)", "When the app opens, at most every 12 hours (GitHub Releases)"),
+                ui.autoUpdate) { vm.setAutoUpdateCheck(it) }
         }
 
         SectionTitle(tr("Σχετικά", "About"))

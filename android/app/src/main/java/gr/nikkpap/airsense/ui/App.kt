@@ -23,6 +23,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -63,6 +64,26 @@ fun MainScaffold(vm: MainViewModel, ui: UiState) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     val snack = remember { SnackbarHostState() }
     LaunchedEffect(Unit) { vm.messages.collect { snack.showSnackbar(it) } }
+    // OTA: "new version" dialog (automatic check on start)
+    val up = ui.update
+    if (ui.updateDialog && up != null) {
+        AlertDialog(
+            onDismissRequest = { vm.dismissUpdateDialog() },
+            title = { Text(tr("🆕 Νέα έκδοση AirSense v${up.version}", "🆕 New AirSense version v${up.version}")) },
+            text = {
+                Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
+                    Text(tr("Έχεις τη v${gr.nikkpap.airsense.BuildConfig.VERSION_NAME}. Θες να την ενημερώσεις τώρα;",
+                        "You have v${gr.nikkpap.airsense.BuildConfig.VERSION_NAME}. Update now?"))
+                    if (up.notes.isNotBlank()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(up.notes, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            },
+            confirmButton = { Button(onClick = { vm.downloadAndInstall() }) { Text(tr("Ενημέρωση", "Update")) } },
+            dismissButton = { TextButton(onClick = { vm.dismissUpdateDialog() }) { Text(tr("Αργότερα", "Later")) } }
+        )
+    }
     Scaffold(
         snackbarHost = { SnackbarHost(snack) },
         topBar = {
@@ -104,6 +125,10 @@ fun MainScaffold(vm: MainViewModel, ui: UiState) {
         }
     ) { pad ->
         Box(Modifier.padding(pad)) {
+            ui.updateProgress?.let { p ->
+                if (p >= 0f) LinearProgressIndicator(progress = { p }, modifier = Modifier.fillMaxWidth().zIndex(1f))
+                else LinearProgressIndicator(Modifier.fillMaxWidth().zIndex(1f))
+            }
             when (tab) {
                 0 -> HomeScreen(vm, ui)
                 1 -> AlertsScreen(vm, ui)

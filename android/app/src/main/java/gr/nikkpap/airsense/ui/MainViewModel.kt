@@ -22,6 +22,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import gr.nikkpap.airsense.data.Updater
+import gr.nikkpap.airsense.BuildConfig
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -43,6 +45,13 @@ data class UiState(
     val error: String? = null,
     val config: PcConfig? = null,
     val busy: Boolean = false,
+    // OTA
+    val update: Updater.Info? = null,       // a newer APK on GitHub
+    val updateDialog: Boolean = false,      // show the "new version" dialog
+    val updateProgress: Float? = null,      // null = not downloading · 0..1 · -1 = unknown size
+    val updateChecking: Boolean = false,
+    val updateMsg: String? = null,
+    val autoUpdate: Boolean = true,
 )
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -52,7 +61,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _ui = MutableStateFlow(
         UiState(
             configured = prefs.configured, en = prefs.lang == "en", theme = prefs.theme, dynamic = prefs.dynamic,
-            hours = prefs.hours, selected = prefs.selected.ifBlank { null }
+            hours = prefs.hours, selected = prefs.selected.ifBlank { null }, autoUpdate = prefs.autoUpdateCheck
         )
     )
     val ui: StateFlow<UiState> = _ui.asStateFlow()
@@ -68,6 +77,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var lastWx = 0L
 
     init {
+        Updater.cleanup(app)
+        // OTA: automatic check on start, at most every 12 hours
+        if (prefs.autoUpdateCheck && System.currentTimeMillis() - prefs.lastUpdateCheck > 12 * 3600_000L) {
+            viewModelScope.launch { delay(4000); checkUpdate(manual = false) }
+        }
         viewModelScope.launch {
             while (true) {
                 if (foreground && _ui.value.configured) refresh(silent = true)
@@ -216,4 +230,49 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun exportUrl(kind: String) = api.exportUrl(kind, _ui.value.hours)
     fun webUrl() = api.webUrl()
+
+    // ═════════ OTA (GitHub Releases) ═════════
+    fun checkUpdate(manual: Boolean = true): Job = viewModelScope.launch {
+        update { it.copy(updateChecking = true, updateMsg = null) }
+        try {
+            val info = Updater.check()
+            prefs.lastUpdateCheck = System.currentTimeMillis()
+            update {
+                it.copy(update = info, updateChecking = false, updateDialog = info != null,
+                    updateMsg = if (info == null) t("✔ Έχεις την τελευταία έκδοση", "✔ You have the latest version") else null)
+            }
+            if (info == null && manual) say(t("✔ Έχεις την τελευταία έκδοση (${BuildConfig.VERSION_NAME})",
+                "✔ You have the latest version (${BuildConfig.VERSION_NAME})"))
+        } catch (e: Exception) {
+            update { it.copy(updateChecking = false, updateMsg = t("Δεν έγινε έλεγχος: ", "Check failed: ") + e.message) }
+            if (manual) say(t("Δεν έγινε έλεγχος ενημέρωσης (internet;)", "Update check failed (internet?)"))
+        }
+    }
+
+    fun dismissUpdateDialog() = update { it.copy(updateDialog = false) }
+
+    fun setAutoUpdateCheck(v: Boolean) {
+        prefs.autoUpdateCheck = v
+        update { it.copy(autoUpdate = v) }
+    }
+
+    fun downloadAndInstall(): Job = viewModelScope.launch {
+        val info = _ui.value.update ?: return@launch
+        val ctx = getApplication<Application>()
+        if (!Updater.canInstall(ctx)) {
+            say(t("Επίτρεψε «Εγκατάσταση άγνωστων εφαρμογών» για το AirSense και ξαναπάτα Ενημέρωση",
+                "Allow \"Install unknown apps\" for AirSense, then tap Update again"))
+            Updater.openInstallPermission(ctx)
+            return@launch
+        }
+        update { it.copy(updateProgress = 0f, updateDialog = false) }
+        try {
+            val apk = Updater.download(ctx, info) { p -> update { it.copy(updateProgress = p) } }
+            update { it.copy(updateProgress = null) }
+            Updater.install(ctx, apk)
+        } catch (e: Exception) {
+            update { it.copy(updateProgress = null) }
+            say(t("Η λήψη απέτυχε: ", "Download failed: ") + e.message)
+        }
+    }
 }

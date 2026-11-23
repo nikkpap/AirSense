@@ -162,15 +162,17 @@ jobs:
           EOF
           ls -la dist
 
-      - name: Signed APK → drop the -debug APK
+      - name: Signed APK → drop the -debug / older APKs
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG=${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v{0}', needs.desktop-pi.outputs.version) }}
           if ls dist/AirSense-Android_v*.apk 2>/dev/null | grep -qv -- '-debug'; then
             rm -f dist/*-debug.apk
-            # also from the release, if an earlier run uploaded one
-            gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json assets -q '.assets[].name' 2>/dev/null | grep -- '-debug\.apk$' | while read -r A; do
+            # also from the release: -debug and older APK versions (the app OTA takes the newest)
+            NEW=$(basename "$(ls dist/AirSense-Android_v*.apk | grep -v -- '-debug' | head -1)")
+            gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json assets -q '.assets[].name' 2>/dev/null \
+              | grep -E '^AirSense-Android_v.*\.apk$' | grep -vx "$NEW" | while read -r A; do
               gh release delete-asset "$TAG" "$A" -R "$GITHUB_REPOSITORY" -y && echo "✔ removed $A"
             done
           fi
