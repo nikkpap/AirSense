@@ -15,7 +15,7 @@ _airsense_pw() {
     esac
     echo "   Type the CURRENT password first, then the NEW one twice (nothing shows while you type):"
     if passwd; then
-      sed -i '/^user$/d' "$_f"
+      sed -i '/^user$/d' "$_f"; _changed=1
       printf '\033[1;32m   ✔ Password changed — use the new one from now on (ssh, sudo).\033[0m\n'
     else
       printf '\033[1;31m   ✖ Not changed\033[0m — I will ask again at the next login (or: airsense password)\n\n'; return 0
@@ -26,11 +26,15 @@ _airsense_pw() {
     case "$_a" in
       n|N|no|NO|No) printf '   OK — later: airsense password\n\n'; return 0 ;;
     esac
-    echo "   (sudo asks for YOUR password first, then the new root password twice)"
+    if [ "${_changed:-0}" = 1 ]; then
+      echo "   [sudo] wants your NEW password (the one you just set) — then the new root password twice"
+    else
+      echo "   [sudo] wants YOUR password (the one you log in with) — then the new root password twice"
+    fi
     if sudo passwd root; then sed -i '/^root$/d' "$_f"; printf '\033[1;32m   ✔ root password changed.\033[0m\n'; fi
   fi
   [ -s "$_f" ] || rm -f "$_f"
   echo
 }
 _airsense_pw
-unset -f _airsense_pw 2>/dev/null; unset _f _a
+unset -f _airsense_pw 2>/dev/null; unset _f _a _changed
