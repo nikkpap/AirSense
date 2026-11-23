@@ -80,6 +80,8 @@ Ethernet cable to the router → `ssh pico@IP` (password `luckfox`). Details: [l
 
 ### Android
 Install the APK → "Add server" → scan the QR code (`airsense qr` on the board, or Settings on the PC).
+**Updates (OTA):** the app checks GitHub Releases by itself (when it opens, at most every 12 hours) → «🆕 New version» → **Update**.
+By hand: Settings → **Updates** → «🔄 Check for updates». The first time Android asks to allow *Install unknown apps* for AirSense.
 
 ---
 
@@ -336,6 +338,8 @@ wget -qO get.sh https://raw.githubusercontent.com/nikkpap/AirSense/main/get.sh &
 
 ### Android
 Εγκατάσταση του APK → «Προσθήκη server» → σκανάρισμα QR (`airsense qr` στην πλακέτα, ή Ρυθμίσεις στο PC).
+**Ενημερώσεις (OTA):** η εφαρμογή ελέγχει μόνη της τα GitHub Releases (στο άνοιγμα, το πολύ κάθε 12 ώρες) → «🆕 Νέα έκδοση» → **Ενημέρωση**.
+Με το χέρι: Ρυθμίσεις → **Ενημερώσεις** → «🔄 Έλεγχος για ενημέρωση». Την πρώτη φορά το Android ζητά άδεια *Εγκατάσταση άγνωστων εφαρμογών* για το AirSense.
 
 ---
 
