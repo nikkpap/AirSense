@@ -15,7 +15,7 @@ Developer : Nikolaos K. Paridis (aka nikkpap) — ALU DEV TEAM
 APP_NAME = "AirSense"
 OLD_APP_NAMES = ("ALU HygroLink", "ALU AirSense")   # παλιά ονόματα (μεταφορά δεδομένων/ρυθμίσεων)
 OLD_APP_NAME = OLD_APP_NAMES[0]
-APP_VERSION = "1.6.14"
+APP_VERSION = "1.6.15"
 AUTHOR = "Nikolaos K. Paridis (aka nikkpap)"
 TEAM = "ALU DEV TEAM"
 
@@ -37,9 +37,17 @@ REQUIRED = [("PyQt6", "PyQt6"), ("pyqtgraph", "pyqtgraph"), ("numpy", "numpy"), 
 LOG_FILE = os.path.join(os.environ.get("TEMP") or os.path.expanduser("~"), "AirSense_log.txt")
 
 
+for _st in (sys.stdout, sys.stderr):          # console in UTF-8 (Greek instead of ������)
+    try:
+        _st.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
+
 def _log(msg):
     try:
-        with open(LOG_FILE, "a", encoding="utf-8") as f:
+        new = not os.path.exists(LOG_FILE) or os.path.getsize(LOG_FILE) == 0
+        with open(LOG_FILE, "a", encoding="utf-8-sig" if new else "utf-8") as f:
             f.write(time.strftime("%Y-%m-%d %H:%M:%S ") + msg + "\n")
     except Exception:
         pass
@@ -6384,7 +6392,8 @@ def _kill_old_instances():
     if os.name != "nt":
         return
     try:
-        ps = ("Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*ALU_HygroLink*' -or $_.CommandLine -like '*AirSense*.pyw*' } | "
+        ps = ("Get-CimInstance Win32_Process | Where-Object { $_.Name -match '^pythonw?(3[0-9.]*)?\\.exe$' -and "
+              "($_.CommandLine -like '*ALU_HygroLink*' -or $_.CommandLine -like '*AirSense*.pyw*') } | "
               "Select-Object ProcessId,ParentProcessId,CommandLine | ConvertTo-Json -Compress")
         r = subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, text=True,
                            timeout=25, creationflags=0x08000000)
@@ -6454,7 +6463,7 @@ def main():
     if sock.waitForConnected(400):
         sock.write(b"hello")
         sock.flush()
-        reply = bytes(sock.readAll()).decode(errors="ignore").strip() if sock.waitForReadyRead(1200) else ""
+        reply = bytes(sock.readAll()).decode(errors="ignore").strip() if sock.waitForReadyRead(4000) else ""
         if reply and _ver(reply) >= _ver(APP_VERSION):
             sock.write(b"show")          # ίδια ή νεότερη έκδοση τρέχει ήδη → εμφάνισέ την
             sock.flush()
