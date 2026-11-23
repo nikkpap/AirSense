@@ -83,6 +83,8 @@ Ethernet cable to the router → `ssh pico@IP` (password `luckfox`). Details: [l
 Install the APK → "Add server" → scan the QR code (`airsense qr` on the board, or Settings on the PC).
 **Updates (OTA):** the app checks GitHub Releases by itself (when it opens, at most every 12 hours) → «🆕 New version» → **Update**.
 By hand: Settings → **Updates** → «🔄 Check for updates». The first time Android asks to allow *Install unknown apps* for AirSense.
+**Theme:** 🌓 Auto (follows the phone) · 🕗 By time (dark 20:00–07:00) · 🌙 Dark · ☀ Light — quick switch from the icon at the top right.
+**Widget:** long-press the home screen → Widgets → AirSense → temperature + humidity, ↻ to refresh.
 
 ---
 
@@ -357,6 +359,8 @@ wget -qO get.sh https://raw.githubusercontent.com/nikkpap/AirSense/main/get.sh &
 Εγκατάσταση του APK → «Προσθήκη server» → σκανάρισμα QR (`airsense qr` στην πλακέτα, ή Ρυθμίσεις στο PC).
 **Ενημερώσεις (OTA):** η εφαρμογή ελέγχει μόνη της τα GitHub Releases (στο άνοιγμα, το πολύ κάθε 12 ώρες) → «🆕 Νέα έκδοση» → **Ενημέρωση**.
 Με το χέρι: Ρυθμίσεις → **Ενημερώσεις** → «🔄 Έλεγχος για ενημέρωση». Την πρώτη φορά το Android ζητά άδεια *Εγκατάσταση άγνωστων εφαρμογών* για το AirSense.
+**Θέμα:** 🌓 Αυτόματο (ακολουθεί το κινητό) · 🕗 Με την ώρα (σκούρο 20:00–07:00) · 🌙 Σκούρο · ☀ Φωτεινό — γρήγορη αλλαγή από το εικονίδιο πάνω δεξιά.
+**Widget:** παρατεταμένο πάτημα στην αρχική οθόνη → Widgets → AirSense → θερμοκρασία + υγρασία, ↻ για ανανέωση.
 
 ---
 

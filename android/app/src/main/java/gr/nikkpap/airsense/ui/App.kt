@@ -103,6 +103,15 @@ fun MainScaffold(vm: MainViewModel, ui: UiState) {
                 },
                 actions = {
                     if (ui.busy) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+                    IconButton(onClick = { vm.setTheme(nextTheme(ui.theme)) }) {
+                        Icon(
+                            when (ui.theme) {
+                                "dark" -> Icons.Filled.DarkMode; "light" -> Icons.Filled.LightMode
+                                "time" -> Icons.Filled.Schedule; else -> Icons.Filled.BrightnessAuto
+                            },
+                            contentDescription = tr("Θέμα", "Theme")
+                        )
+                    }
                     IconButton(onClick = { vm.refreshNow() }) { Icon(Icons.Filled.Refresh, contentDescription = null) }
                 }
             )

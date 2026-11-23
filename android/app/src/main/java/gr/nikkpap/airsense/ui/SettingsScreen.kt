@@ -33,10 +33,17 @@ fun SettingsScreen(vm: MainViewModel, ui: UiState) {
             Spacer(Modifier.height(8.dp))
             Text(tr("Θέμα", "Theme"), fontWeight = FontWeight.Bold)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for ((k, l) in listOf("system" to tr("Συστήματος", "System"), "dark" to tr("Σκούρο", "Dark"), "light" to tr("Φωτεινό", "Light"))) {
+                for ((k, l) in listOf("system" to tr("🌓 Αυτόματο", "🌓 Auto"), "time" to tr("🕗 Με την ώρα", "🕗 By time"),
+                        "dark" to tr("🌙 Σκούρο", "🌙 Dark"), "light" to tr("☀ Φωτεινό", "☀ Light"))) {
                     FilterChip(selected = ui.theme == k, onClick = { vm.setTheme(k) }, label = { Text(l) })
                 }
             }
+            Text(when (ui.theme) {
+                "time" -> tr("Σκούρο 20:00–07:00, φωτεινό την ημέρα — αλλάζει μόνο του", "Dark 20:00–07:00, light by day — switches by itself")
+                "dark" -> tr("Πάντα σκούρο", "Always dark")
+                "light" -> tr("Πάντα φωτεινό", "Always light")
+                else -> tr("Ακολουθεί το κινητό (σκούρο/φωτεινό θέμα του Android)", "Follows the phone (Android dark/light theme)")
+            }, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (Build.VERSION.SDK_INT >= 31) {
                 SwitchRow(tr("Δυναμικά χρώματα (Material You)", "Dynamic colors (Material You)"),
                     tr("Χρώματα από την ταπετσαρία σου", "Colors from your wallpaper"), ui.dynamic) { vm.setDynamic(it) }

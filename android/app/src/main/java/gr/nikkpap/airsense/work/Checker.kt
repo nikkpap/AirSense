@@ -37,8 +37,10 @@ object Checker {
                         "AirSense on the PC is not responding. Is the PC / Tailscale on?") + "\n" + (e.message ?: "")
                 )
             }
+            runCatching { gr.nikkpap.airsense.widget.AirSenseWidget.markOffline(ctx) }
             return CheckResult(null, cachedWeather(p))
         }
+        runCatching { gr.nikkpap.airsense.widget.AirSenseWidget.save(ctx, st) }
         p.failCount = 0
         if (p.isActive("server")) {
             p.setActive("server", false)

@@ -110,6 +110,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             var sel = _ui.value.selected
             if (sel == null || st.devices.none { it.id == sel }) sel = st.devices.firstOrNull()?.id
             update { it.copy(status = st, online = true, error = null, selected = sel) }
+            runCatching { gr.nikkpap.airsense.widget.AirSenseWidget.save(getApplication(), st) }
             val now = System.currentTimeMillis()
             if (now - lastWx > 5 * 60_000L) {
                 lastWx = now
@@ -138,6 +139,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun select(id: String) {
         prefs.selected = id
         update { it.copy(selected = id) }
+        _ui.value.status?.let { st -> runCatching { gr.nikkpap.airsense.widget.AirSenseWidget.save(getApplication(), st) } }
         viewModelScope.launch { loadHistory() }
     }
 

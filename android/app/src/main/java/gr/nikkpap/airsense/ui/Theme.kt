@@ -1,5 +1,6 @@
 package gr.nikkpap.airsense.ui
 
+import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
@@ -8,10 +9,19 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 
 val Brand = Color(0xFF2B6CFF)
 val TempC = Color(0xFFFF9F43)
@@ -43,18 +53,46 @@ private val LightScheme = lightColorScheme(
     surfaceContainerHighest = Color(0xFFEDF1F8),
 )
 
+/** «time» mode: dark from 20:00 to 07:00 */
+fun isNightNow(): Boolean {
+    val h = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+    return h >= 20 || h < 7
+}
+
 @Composable
 fun HygroTheme(theme: String, dynamic: Boolean, content: @Composable () -> Unit) {
+    // «time»: re-check every minute so it switches by itself at 20:00 / 07:00
+    var night by remember { mutableStateOf(isNightNow()) }
+    if (theme == "time") {
+        LaunchedEffect(Unit) { while (true) { night = isNightNow(); kotlinx.coroutines.delay(60_000) } }
+    }
     val dark = when (theme) {
         "dark" -> true
         "light" -> false
+        "time" -> night
         else -> isSystemInDarkTheme()
     }
     val ctx = LocalContext.current
     val scheme = if (dynamic && Build.VERSION.SDK_INT >= 31) {
         if (dark) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
     } else if (dark) DarkScheme else LightScheme
+    // status / navigation bar icons follow the APP theme (not only the phone's)
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val w = (view.context as? Activity)?.window ?: return@SideEffect
+            val c = WindowCompat.getInsetsController(w, view)
+            c.isAppearanceLightStatusBars = !dark
+            c.isAppearanceLightNavigationBars = !dark
+            w.decorView.setBackgroundColor(scheme.background.toArgb())
+        }
+    }
     MaterialTheme(colorScheme = scheme, content = content)
+}
+
+/** next theme for the quick toggle: system → time → dark → light → system */
+fun nextTheme(t: String): String = when (t) {
+    "system" -> "time"; "time" -> "dark"; "dark" -> "light"; else -> "system"
 }
 
 /** Γλώσσα: Ελληνικά / English */

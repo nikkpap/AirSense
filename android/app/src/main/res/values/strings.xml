@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">AirSense</string>
+    <string name="widget_desc">Temperature and humidity of your sensor</string>
 </resources>

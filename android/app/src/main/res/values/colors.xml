@@ -1,5 +1,10 @@
 <resources>
-    <color name="bg">#0F131A</color>
+    <color name="bg">#F5F7FB</color>
+    <color name="w_bg">#E60F131A</color>
+    <color name="w_text">#FFE6EBF5</color>
+    <color name="w_muted">#FF8B96AB</color>
+    <color name="w_temp">#FFFF9F43</color>
+    <color name="w_hum">#FF3FA7FF</color>
     <color name="ic_bg">#0F131A</color>
     <color name="brand">#2B6CFF</color>
 </resources>
