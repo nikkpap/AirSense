@@ -1,5 +1,10 @@
 # Αλλαγές — AirSense
 
+## AirSense Remote v1.0.0 (νέο)
+- Πρόγραμμα Windows για **διαχείριση της πλακέτας μέσω SSH με γραφικό**: LED (πλακέτα, SSH, web, αισθητήρες, Tailscale, υγεία),
+  `airsense status` σε δέντρο ✔/⚠/✖, ζωντανές τιμές, QR, 22 εντολές με ένα κλικ, δική σου εντολή, τερματικό με χρώματα,
+  αυτόματος κωδικός sudo, απαντήσεις σε ερωτήσεις, Ctrl+C. Route Auto: LAN → airsense.local → Tailscale.
+
 ## v1.6.17
 - Ζώνη ώρας: όπου το `timedatectl set-timezone` μπλοκάρεται («Access denied», εικόνα Ubuntu του Luckfox) γράφεται απευθείας
   (`/etc/localtime`, `/etc/timezone`) — στο setup, στο boot (`TIMEZONE=`) και στο `airsense clock Ζώνη`.

@@ -28,6 +28,7 @@ It can be your PC (`AirSense_vX.pyw`) **or** a small board that stays on 24/7.
 | `AirSense-Pi_vX.zip` | **Raspberry Pi** Zero 2 W / 3 / 4 / 5 | One command (below) · [pi/ODIGIES_Raspberry_Pi.md](pi/ODIGIES_Raspberry_Pi.md) |
 | `AirSense-Luckfox_vX.zip` | **Luckfox Pico** Pro / Max (Ubuntu) | One command (below) · [luckfox/ODIGIES_Luckfox.md](luckfox/ODIGIES_Luckfox.md) |
 | `AirSense-Android_vX.apk` | Android 8+ | Signed APK — install it, then scan the server's QR code. |
+| `AirSense_Remote_vX.pyw` | Windows | **Manage the board** (Pi / Luckfox) over SSH with a GUI — see below. |
 
 ## ✨ Features
 - **Live dashboard** for every sensor: temperature, humidity, dew point, absolute humidity — inside / outside with the **difference** and **ventilation advice**.
@@ -84,6 +85,17 @@ Install the APK → "Add server" → scan the QR code (`airsense qr` on the boar
 By hand: Settings → **Updates** → «🔄 Check for updates». The first time Android asks to allow *Install unknown apps* for AirSense.
 
 ---
+
+## 🖥 AirSense Remote — manage the board from Windows (GUI)
+`AirSense_Remote_vX.pyw` → double-click (installs PyQt6, paramiko, qrcode by itself) → **⚙ Settings**: local IP, Tailscale IP, user, password, PIN.
+- **LEDs:** Board · SSH · Web :8765 · Sensors · Tailscale · Health — green / orange / red, checked every 15 s (hover = details).
+- **Route:** Auto tries LAN → airsense.local → Tailscale and keeps the one that works (home or office, same program).
+- **Board status** = `airsense status` as a tree with ✔ / ⚠ / ✖ · **live sensor values** · **QR** codes for the phone.
+- **One-click commands:** Status, Logs, Live log, Clock, MAC, Restart, Stop, Update, Auto-update, Tailscale, Admin password,
+  Scan, Add by IP, Set PIN, City, Time zone, Disk/RAM, CPU temp, Password, Reboot, Power off (dangerous ones ask first).
+- **Terminal + your own command** (↑ ↓ history): colors, progress bars, the `[sudo]` password is answered by itself,
+  questions (Y/n, passwords — tick *hidden*) are answered in the same box, **■ Stop** = Ctrl+C.
+- Works with Tailscale SSH too (no password). The password is stored encrypted with your Windows account (DPAPI).
 
 ## 🧰 Commands on the board (ssh) — all of them
 | Command | What it does |
@@ -263,6 +275,7 @@ In the user's home folder (or on the SD card boot partition / a USB stick). Appl
 - `linux/` — **shared** scripts for Raspberry Pi + Luckfox (setup, boot, update, tailscale, `airsense` command, password, clock).
 - `pi/` — WiFi tool, `.bat` and Raspberry Pi guide.
 - `luckfox/` — `.bat` and Luckfox Pico guide.
+- `remote/` — AirSense Remote (Windows GUI to manage the board over SSH).
 - `android/` — the Android app (Kotlin, Jetpack Compose) — opens in Android Studio. `android/signing/` — one-click signing key setup.
 - `get.sh` — the one-command installer (same as `linux/get.sh`, `pi/get.sh`, `luckfox/get.sh`).
 
@@ -307,6 +320,7 @@ Remote access: [Tailscale](https://tailscale.com)
 | `AirSense-Pi_vX.zip` | **Raspberry Pi** Zero 2 W / 3 / 4 / 5 | Μία εντολή (παρακάτω) · [pi/ODIGIES_Raspberry_Pi.md](pi/ODIGIES_Raspberry_Pi.md) |
 | `AirSense-Luckfox_vX.zip` | **Luckfox Pico** Pro / Max (Ubuntu) | Μία εντολή (παρακάτω) · [luckfox/ODIGIES_Luckfox.md](luckfox/ODIGIES_Luckfox.md) |
 | `AirSense-Android_vX.apk` | Android 8+ | Υπογεγραμμένο APK → εγκατάσταση → σκανάρεις το QR του server. |
+| `AirSense_Remote_vX.pyw` | Windows | **Διαχείριση της πλακέτας** (Pi / Luckfox) μέσω SSH με γραφικό — δες παρακάτω. |
 
 ---
 
@@ -343,6 +357,17 @@ wget -qO get.sh https://raw.githubusercontent.com/nikkpap/AirSense/main/get.sh &
 Με το χέρι: Ρυθμίσεις → **Ενημερώσεις** → «🔄 Έλεγχος για ενημέρωση». Την πρώτη φορά το Android ζητά άδεια *Εγκατάσταση άγνωστων εφαρμογών* για το AirSense.
 
 ---
+
+## 🖥 AirSense Remote — διαχείριση της πλακέτας από Windows (γραφικό)
+`AirSense_Remote_vX.pyw` → διπλό κλικ (εγκαθιστά μόνο του PyQt6, paramiko, qrcode) → **⚙ Settings**: τοπική IP, Tailscale IP, χρήστης, κωδικός, PIN.
+- **LED:** Πλακέτα · SSH · Web :8765 · Αισθητήρες · Tailscale · Υγεία — πράσινο / πορτοκαλί / κόκκινο, έλεγχος κάθε 15″ (ποντίκι από πάνω = λεπτομέρειες).
+- **Route:** το Auto δοκιμάζει LAN → airsense.local → Tailscale και κρατά όποιο δουλεύει (σπίτι ή γραφείο, ίδιο πρόγραμμα).
+- **Κατάσταση πλακέτας** = `airsense status` σε δέντρο με ✔ / ⚠ / ✖ · **ζωντανές τιμές αισθητήρων** · **QR** για το κινητό.
+- **Εντολές με ένα κλικ:** Status, Logs, Live log, Clock, MAC, Restart, Stop, Update, Auto-update, Tailscale, Admin password,
+  Scan, Add by IP, Set PIN, City, Time zone, Disk/RAM, CPU temp, Password, Reboot, Power off (τα επικίνδυνα ρωτούν πρώτα).
+- **Τερματικό + δική σου εντολή** (↑ ↓ ιστορικό): χρώματα, μπάρες προόδου, ο κωδικός του `[sudo]` μπαίνει μόνος του,
+  οι ερωτήσεις (Y/n, κωδικοί — τσέκαρε *hidden*) απαντιούνται στο ίδιο κουτί, **■ Stop** = Ctrl+C.
+- Δουλεύει και με Tailscale SSH (χωρίς κωδικό). Ο κωδικός αποθηκεύεται κρυπτογραφημένος με τον λογαριασμό σου στα Windows (DPAPI).
 
 ## 🧰 Εντολές στην πλακέτα (ssh) — όλες
 | Εντολή | Τι κάνει |
@@ -512,6 +537,7 @@ Raspberry Pi Zero 2 W: το SSH μέσω USB θέλει ειδική ρύθμι�
 - `linux/` — **κοινά** scripts για Raspberry Pi + Luckfox (setup, boot, update, tailscale, εντολή `airsense`, κωδικός, ρολόι).
 - `pi/` — WiFi εργαλείο, `.bat` και οδηγίες Raspberry Pi.
 - `luckfox/` — `.bat` και οδηγίες Luckfox Pico.
+- `remote/` — AirSense Remote (γραφικό Windows για διαχείριση της πλακέτας μέσω SSH).
 - `android/` — η εφαρμογή Android (Kotlin, Jetpack Compose) — ανοίγει στο Android Studio.
 - `get.sh` — ο installer μιας εντολής (ίδιος με `linux/get.sh`, `pi/get.sh`, `luckfox/get.sh`).
 

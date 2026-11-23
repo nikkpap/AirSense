@@ -39,7 +39,7 @@ jobs:
 
       - name: Έλεγχος κώδικα
         run: |
-          python -m py_compile desktop/AirSense.pyw pi/airsense_wifi.py
+          python -m py_compile desktop/AirSense.pyw pi/airsense_wifi.py remote/AirSense_Remote.pyw
           bash -n pi/install_pi.sh
           for f in linux/*.sh linux/airsense; do bash -n "$f"; done
           sh -n linux/airsense-password.sh
@@ -54,6 +54,8 @@ jobs:
           V=${{ steps.ver.outputs.version }}
           mkdir -p dist AirSense-Pi AirSense-Luckfox
           cp desktop/AirSense.pyw "dist/AirSense_v$V.pyw"
+          RV=$(grep -m1 -oP '^APP_VERSION = "\K[^"]+' remote/AirSense_Remote.pyw)
+          cp remote/AirSense_Remote.pyw "dist/AirSense_Remote_v$RV.pyw"     # Windows: manage the board over SSH
           # Raspberry Pi: common Linux scripts + WiFi tool + Pi docs
           cp linux/* AirSense-Pi/
           cp pi/airsense_wifi.py pi/install_pi.sh pi/install_from_windows.bat pi/ODIGIES_Raspberry_Pi.md AirSense-Pi/
@@ -154,6 +156,7 @@ jobs:
           ---
           **Αρχεία**
           - `AirSense_vX.pyw` — Windows: διπλό κλικ (εγκαθιστά μόνο του ό,τι χρειάζεται).
+          - `AirSense_Remote_vX.pyw` — Windows: διαχείριση της πλακέτας (Raspberry Pi / Luckfox) μέσω SSH με γραφικό περιβάλλον.
           - `AirSense-Pi_vX.zip` — Raspberry Pi (Zero 2 W/3/4/5) server — μία εντολή: `wget -qO get.sh https://raw.githubusercontent.com/nikkpap/AirSense/main/get.sh && sudo bash get.sh`
           - `AirSense-Luckfox_vX.zip` — Luckfox Pico Pro/Max (Ubuntu) server — η ίδια εντολή (βρίσκει μόνη της την πλακέτα).
           - `AirSense-Android_vX.apk` — εφαρμογή Android (υπογεγραμμένη).
