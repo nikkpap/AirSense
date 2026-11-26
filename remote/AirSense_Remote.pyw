@@ -14,7 +14,7 @@ Double-click: installs what it needs (PyQt6, paramiko, qrcode) by itself.
 Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM
 """
 APP_NAME = "AirSense Remote"
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.3.0"
 
 import os
 import sys
@@ -438,6 +438,7 @@ class Bus(QObject):
     sensors = pyqtSignal(object)
     find_done = pyqtSignal(str, str)     # result: found / added / none / error, message
     learned = pyqtSignal(str, str)       # board LAN IP, Tailscale IP
+    open_file = pyqtSignal(str)
 
 
 # ═════════════════════════ UI pieces ═════════════════════════
@@ -641,6 +642,7 @@ COMMANDS = [
     ("Info", "🕒 Clock", "airsense clock", "run", "Time, time zone, NTP"),
     ("Info", "🔗 MAC", "airsense mac", "run", "MAC address (for an IP reservation in the router)"),
     ("Info", "📋 Help", "airsense help", "run", "All airsense commands"),
+    ("Info", "📄 Phone guide", "", "guide", "Phone setup guide PDF (Greek + English, with QR codes) — print it or send it"),
     ("Server", "↻ Restart", "airsense restart", "run", "Restart the AirSense server"),
     ("Server", "■ Stop", "airsense stop", "confirm", "Stop the server (starts again on reboot)"),
     ("Server", "⬇ Update", "airsense update", "run", "Check GitHub + update now"),
@@ -685,6 +687,7 @@ class Main(QMainWindow):
         self.bus.sensors.connect(self._on_sensors)
         self.bus.find_done.connect(self._find_done)
         self.bus.learned.connect(self._on_learned)
+        self.bus.open_file.connect(lambda fn: QDesktopServices.openUrl(QUrl.fromLocalFile(fn)))
         self._finding = False
         self._sensor_bad = 0
         self._last_autofind = 0.0
@@ -1234,6 +1237,32 @@ class Main(QMainWindow):
             self.st_sum.setText("<span style='color:#2ecc71'>✔ All good</span>")
             self.led["health"].set("ok", "airsense status: all good")
 
+    # ── 📄 phone guide PDF (made by the board's server) ──
+    def phone_guide(self):
+        h = self.web_host()
+        url = f"http://{h}:{self.cfg.get('web_port', 8765)}/setup.pdf"
+        self._term_sys(f"📄 Phone guide ← {url}")
+
+        def job():
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": APP_NAME})
+                with urllib.request.urlopen(req, timeout=60) as r:
+                    data = r.read()
+                if not data.startswith(b"%PDF"):
+                    raise RuntimeError("not a PDF (old AirSense on the board? → ⬇ Update)")
+                d = os.path.join(os.path.expanduser("~"), "Downloads")
+                os.makedirs(d, exist_ok=True)
+                fn = os.path.join(d, "AirSense_Phone_Setup_GR_EN.pdf")
+                with open(fn, "wb") as f:
+                    f.write(data)
+                self.bus.term.emit(f"\x1b[32m✔ Saved: {fn}\x1b[0m")
+                self.bus.open_file.emit(fn)
+            except urllib.error.HTTPError as e:
+                self.bus.term.emit(f"\x1b[31m✖ HTTP {e.code} — old AirSense on the board? Press ⬇ Update first\x1b[0m")
+            except Exception as e:
+                self.bus.term.emit(f"\x1b[31m✖ {e}\x1b[0m")
+        threading.Thread(target=job, daemon=True).start()
+
     # ── 🔎 find the sensor automatically ──
     def _autofind_toggled(self, on):
         self.cfg["auto_find"] = bool(on)
@@ -1334,6 +1363,9 @@ class Main(QMainWindow):
             return
         if kind == "find":
             self.find_sensor(quiet=False)
+            return
+        if kind == "guide":
+            self.phone_guide()
             return
         if kind == "install":
             if QMessageBox.question(self, "⬇ Install on board",

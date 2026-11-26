@@ -122,6 +122,12 @@ case "${1:-status}" in
     esac ;;
   wifi)     if [ -x /usr/local/bin/airsense-wifi ]; then shift; sudo /usr/local/bin/airsense-wifi "$@"
             else echo "WiFi tool: Raspberry Pi (NetworkManager) only — this board uses Ethernet"; fi ;;
+  guide|pdf)
+            OUT="$UH/AirSense_Phone_Setup_GR_EN.pdf"
+            if curl -fsS -o "$OUT" "http://127.0.0.1:8765/setup.pdf"; then
+              echo "✔ $OUT"
+              echo "  Also on the phone/PC: http://$(hostname -I | awk '{print $1}'):8765/setup.pdf"
+            else echo "✖ The server does not answer (airsense status)"; fi ;;
   password|passwd)
             echo "🔑 Change the password of «$(id -un)» (current first, then the new one twice):"
             passwd && sudo /usr/local/sbin/airsense-pwcheck -v
@@ -168,6 +174,7 @@ case "${1:-status}" in
              sudo rm -rf /opt/airsense; echo "✔ Removed (data is kept in $DATA)"; sudo rm -f /usr/local/bin/airsense ;;
   *) cat <<EOF
 airsense  (= airsense status) full diagnosis: server, sensors, network, Tailscale, updates, system
+airsense guide               phone setup guide PDF (Greek + English, with QR) → also http://IP:8765/setup.pdf
 airsense qr                  QR codes for the phone
 airsense mac                 network address (MAC) — for a DHCP reservation in the router
 airsense wifi                Raspberry Pi WiFi: scan, add, saved networks (menu)

@@ -15,7 +15,7 @@ Developer : Nikolaos K. Paridis (aka nikkpap) — ALU DEV TEAM
 APP_NAME = "AirSense"
 OLD_APP_NAMES = ("ALU HygroLink", "ALU AirSense")   # παλιά ονόματα (μεταφορά δεδομένων/ρυθμίσεων)
 OLD_APP_NAME = OLD_APP_NAMES[0]
-APP_VERSION = "1.6.18"
+APP_VERSION = "1.6.19"
 AUTHOR = "Nikolaos K. Paridis (aka nikkpap)"
 TEAM = "ALU DEV TEAM"
 
@@ -1442,6 +1442,141 @@ def _nice_range(lo, hi, ticks=5):
     return math.floor(lo / step) * step, math.ceil(hi / step) * step, step
 
 
+def build_setup_pdf(urls, has_pin=False, version=""):
+    """Οδηγός σύνδεσης κινητού (σελίδα 1 Ελληνικά, σελίδα 2 English) με QR για εφαρμογή, server, Tailscale → bytes.
+    urls: [(label, url)] όπως server_urls()."""
+    _need_reportlab()
+    import io
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, KeepTogether
+    from reportlab.graphics.shapes import Drawing
+    from reportlab.graphics.barcode.qr import QrCodeWidget
+
+    FR, FB = _pdf_fonts()
+    BLUE, DARK, GREY, LIGHT, WARNBG, OKBG = (colors.HexColor("#2b6cff"), colors.HexColor("#1b2433"), colors.HexColor("#5b6678"),
+                                            colors.HexColor("#eef3ff"), colors.HexColor("#fff4e0"), colors.HexColor("#e8f8ef"))
+    APK = "https://github.com/nikkpap/AirSense/releases/latest"
+    TSAPP = "https://play.google.com/store/apps/details?id=com.tailscale.ipn"
+    lan = next((u for _l, u in urls if re.match(r"^http://(192\.168|10\.|172\.(1[6-9]|2\d|3[01]))", u)), "")
+    ts = next((u for _l, u in urls if re.match(r"^http://100\.\d+\.\d+\.\d+:", u)), "")
+    st = {
+        "t": ParagraphStyle("t", fontName=FB, fontSize=18, leading=22, textColor=DARK),
+        "s": ParagraphStyle("s", fontName=FR, fontSize=10, leading=13, textColor=GREY),
+        "h": ParagraphStyle("h", fontName=FB, fontSize=12.5, leading=16, textColor=colors.white),
+        "b": ParagraphStyle("b", fontName=FR, fontSize=10, leading=13.2, textColor=DARK),
+        "c": ParagraphStyle("c", fontName=FB, fontSize=9, leading=11, textColor=DARK, alignment=1),
+        "u": ParagraphStyle("u", fontName=FR, fontSize=8, leading=10, textColor=GREY, alignment=1),
+        "sm": ParagraphStyle("sm", fontName=FR, fontSize=8.5, leading=11, textColor=GREY),
+    }
+
+    def link(u, txt=None):
+        return f'<link href="{u}" color="#2b6cff"><u>{txt or u}</u></link>'
+
+    def qr(url, size=29 * mm):
+        w = QrCodeWidget(url)
+        w.barLevel = "M"
+        x1, y1, x2, y2 = w.getBounds()
+        d = Drawing(size, size, transform=[size / (x2 - x1), 0, 0, size / (y2 - y1), 0, 0])
+        d.add(w)
+        return d
+
+    def qr_cell(url, title):
+        if not url:
+            return [Paragraph(title, st["c"]), Spacer(1, 2 * mm), Paragraph("—", st["u"])]
+        return [qr(url), Paragraph(title, st["c"]), Paragraph(link(url, url.replace("https://", "").replace("play.google.com/store/apps/details?id=", "Play: ")[:40]), st["u"])]
+
+    def step(n, word, title, items):
+        head = Table([[Paragraph(f"{word} {n} — {title}", st["h"])]], colWidths=[170 * mm])
+        head.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), BLUE), ("LEFTPADDING", (0, 0), (-1, -1), 9),
+                                  ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5)]))
+        body = Table([[Paragraph("• " + x, st["b"])] for x in items], colWidths=[170 * mm])
+        body.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), LIGHT), ("LEFTPADDING", (0, 0), (-1, -1), 9),
+                                  ("TOPPADDING", (0, 0), (-1, -1), 1.8), ("BOTTOMPADDING", (0, 0), (-1, -1), 1.8)]))
+        return KeepTogether([head, body, Spacer(1, 2.6 * mm)])
+
+    def box(items, bg):
+        t = Table([[x] for x in items], colWidths=[170 * mm])
+        t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), bg), ("LEFTPADDING", (0, 0), (-1, -1), 9),
+                               ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4)]))
+        return t
+
+    T = {
+        "el": dict(
+            title="AirSense — σύνδεση κινητού (Android)",
+            sub=f"Οδηγός που έφτιαξε ο server σου · {datetime.now():%d/%m/%Y %H:%M} · AirSense v{version} · 4 βήματα, ~5 λεπτά",
+            q=["① Εφαρμογή AirSense", "② Στο ίδιο WiFi", "③ Από παντού (Tailscale)", "Εφαρμογή Tailscale"],
+            step="Βήμα",
+            s1=("Εφαρμογή AirSense", ["Σκάναρε το QR ① (ή " + link(APK, "GitHub Releases") + ") → κατέβασε το <b>AirSense-Android_vX.apk</b>.",
+                "Άνοιξέ το · αν πει «Για την ασφάλειά σας…» → <b>Ρυθμίσεις</b> → <b>Να επιτρέπεται από αυτή την πηγή</b> → πίσω → <b>Εγκατάσταση</b>.",
+                "Οι επόμενες ενημερώσεις έρχονται μόνες τους μέσα από την εφαρμογή."]),
+            s2=("Σύνδεση (στο ίδιο WiFi)", ["Το κινητό στο <b>ίδιο WiFi</b> με τον server.",
+                "AirSense → <b>«Βρες αυτόματα»</b> — βρίσκει τον server και αποθηκεύει μόνο του. (Ή «Σκανάρισμα QR» → QR ②.)",
+                "Αν ζητήσει <b>PIN</b>, γράψ' το και πάτα «Δοκιμή & αποθήκευση»."]),
+            s3=("Από παντού (4G, άλλο WiFi)", ["Εγκατάστησε το <b>Tailscale</b> (QR «Εφαρμογή Tailscale») → login.",
+                "Ίδιος λογαριασμός με τον server — ή πάτα την <b>πρόσκληση</b> που σου έστειλε ο διαχειριστής (άνοιξέ τη στο <b>Chrome</b>) → Accept.",
+                "Tailscale <b>ON</b>. Η εφαρμογή AirSense ξέρει ήδη τη διεύθυνση (QR ③) — δεν γράφεις τίποτα."]),
+            s4=("Έξτρα", ["<b>Widget:</b> παρατεταμένο πάτημα στην αρχική οθόνη → Widgets → AirSense.",
+                "<b>Θέμα:</b> το εικονίδιο πάνω δεξιά — Αυτόματο / Με την ώρα / Σκούρο / Φωτεινό.",
+                "<b>Ειδοποιήσεις:</b> καρτέλα Ειδοποιήσεις — όρια θερμοκρασίας/υγρασίας, αισθητήρας εκτός, παγετός."]),
+            pin="<b>PIN:</b> ____________  (ζήτα το από τον διαχειριστή)",
+            nopin="Ο server <b>δεν</b> ζητά PIN.",
+            trouble="<b>Αν κάτι δεν πάει:</b> «Βρες αυτόματα» δεν βρίσκει → ίδιο WiFi; server αναμμένος; · "
+                    "Δεν συνδέεται από 4G → Tailscale <b>ON</b> στο κινητό · «Failed to accept invitation» → άνοιξε τον σύνδεσμο στο <b>Chrome</b> · "
+                    "Λάθος PIN → ζήτα το σωστό.",
+            notail="(Ο server δεν έχει ακόμα Tailscale — μόνο στο ίδιο WiFi.)"),
+        "en": dict(
+            title="AirSense — connect your phone (Android)",
+            sub=f"Guide made by your server · {datetime.now():%Y-%m-%d %H:%M} · AirSense v{version} · 4 steps, ~5 minutes",
+            q=["① AirSense app", "② On the same WiFi", "③ From anywhere (Tailscale)", "Tailscale app"],
+            step="Step",
+            s1=("AirSense app", ["Scan QR ① (or " + link(APK, "GitHub Releases") + ") → download <b>AirSense-Android_vX.apk</b>.",
+                "Open it · if it says \"For your security…\" → <b>Settings</b> → <b>Allow from this source</b> → back → <b>Install</b>.",
+                "Later updates arrive by themselves inside the app."]),
+            s2=("Connect (same WiFi)", ["Phone on the <b>same WiFi</b> as the server.",
+                "AirSense → <b>\"Find automatically\"</b> — it finds the server and saves it. (Or \"Scan QR\" → QR ②.)",
+                "If it asks for a <b>PIN</b>, type it and tap \"Test & save\"."]),
+            s3=("From anywhere (4G, other WiFi)", ["Install <b>Tailscale</b> (QR \"Tailscale app\") → sign in.",
+                "Same account as the server — or tap the <b>invitation</b> the admin sent you (open it in <b>Chrome</b>) → Accept.",
+                "Tailscale <b>ON</b>. The AirSense app already knows the address (QR ③) — nothing to type."]),
+            s4=("Extras", ["<b>Widget:</b> long-press the home screen → Widgets → AirSense.",
+                "<b>Theme:</b> the icon at the top right — Auto / By time / Dark / Light.",
+                "<b>Alerts:</b> tab Alerts — temperature/humidity limits, sensor offline, frost."]),
+            pin="<b>PIN:</b> ____________  (ask the admin)",
+            nopin="The server does <b>not</b> ask for a PIN.",
+            trouble="<b>If something goes wrong:</b> \"Find automatically\" finds nothing → same WiFi? server on? · "
+                    "No connection on 4G → Tailscale <b>ON</b> on the phone · \"Failed to accept invitation\" → open the link in <b>Chrome</b> · "
+                    "Wrong PIN → ask for the right one.",
+            notail="(The server has no Tailscale yet — same WiFi only.)"),
+    }
+    story = []
+    for i, lang in enumerate(("el", "en")):
+        L = T[lang]
+        if i:
+            story.append(PageBreak())
+        story += [Paragraph(L["title"], st["t"]), Spacer(1, 1.5 * mm), Paragraph(L["sub"], st["s"]), Spacer(1, 4 * mm)]
+        cells = [qr_cell(APK, L["q"][0]), qr_cell(lan, L["q"][1]), qr_cell(ts, L["q"][2]), qr_cell(TSAPP, L["q"][3])]
+        qt = Table([cells], colWidths=[42.5 * mm] * 4)
+        qt.setStyle(TableStyle([("ALIGN", (0, 0), (-1, -1), "CENTER"), ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                                ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#c9d6f5")),
+                                ("INNERGRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#dfe6f5")),
+                                ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5)]))
+        story += [qt, Spacer(1, 3 * mm)]
+        story += [box([Paragraph(L["pin"] if has_pin else L["nopin"], st["b"])] + ([] if ts else [Paragraph(L["notail"], st["sm"])]), OKBG),
+                  Spacer(1, 3 * mm)]
+        for n, key in enumerate(("s1", "s2", "s3", "s4"), 1):
+            title, items = L[key]
+            story.append(step(n, L["step"], title, items))
+        story += [box([Paragraph(L["trouble"], st["b"])], WARNBG), Spacer(1, 3 * mm),
+                  Paragraph(f"{APP_NAME} · {AUTHOR} · ALU DEV TEAM · " + link("https://github.com/nikkpap/AirSense", "github.com/nikkpap/AirSense"), st["sm"])]
+    buf = io.BytesIO()
+    SimpleDocTemplate(buf, pagesize=A4, leftMargin=20 * mm, rightMargin=20 * mm, topMargin=11 * mm, bottomMargin=9 * mm,
+                      title="AirSense — Phone setup / Σύνδεση κινητού", author=AUTHOR).build(story)
+    return buf.getvalue()
+
+
 def build_pdf_report(info):
     """Φτιάχνει την αναφορά PDF. info: dict με app, period, devices, weather, labels κ.λπ. → bytes"""
     _need_reportlab()
@@ -2721,7 +2856,7 @@ button.pri{background:#2b6cff!important;color:#fff}.badge{background:#e6eaf2}.wa
 <h2>Καταγραφή συμβάντων</h2>
 <div class="card log" id="log"></div>
 </main>
-<footer>AirSense v__VER__ · Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM</footer>
+<footer><a href="/setup.pdf" target="_blank" style="color:inherit">📄 Οδηγός κινητού (PDF) · Phone guide</a><br>AirSense v__VER__ · Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM</footer>
 <div id="toast"></div>
 <script>
 let WX=null,WXP=[];
@@ -2890,6 +3025,10 @@ def make_handler(engine):
                                             "icons": [{"src": "/icon.svg", "sizes": "any", "type": "image/svg+xml"}]})
                 if p == "/icon.svg":
                     return self._send(200, ICON_SVG, "image/svg+xml")
+                if p in ("/setup.pdf", "/api/setup.pdf"):        # phone guide (addresses + QR only, no secrets)
+                    data = build_setup_pdf(engine.server_urls(), bool(engine.cfg["server"].get("pin")), APP_VERSION)
+                    return self._send(200, data, "application/pdf",
+                                      {"Content-Disposition": 'inline; filename="AirSense_Phone_Setup_GR_EN.pdf"'})
                 if not p.startswith("/api/"):
                     return self._send(404, {"error": "not found"})
                 if not self._auth(qs):
@@ -5646,6 +5785,13 @@ if not HEADLESS:
             row.addWidget(self.qr_lan, 1)
             row.addWidget(self.qr_ts, 1)
             lay.addLayout(row, 1)
+            gr = QHBoxLayout()
+            gl = QLabel("<b>📄 Οδηγός κινητού σε PDF</b> (ελληνικά + English) — με τα QR και τις διευθύνσεις αυτού του server. "
+                        "Τον εκτυπώνεις ή τον στέλνεις σε όποιον θέλει να συνδεθεί.")
+            gl.setWordWrap(True)
+            gr.addWidget(gl, 1)
+            gr.addWidget(_btn("📄 PDF οδηγός κινητού", self._phone_guide_pdf, True))
+            lay.addLayout(gr)
             g = QGroupBox("⚙ Server")
             h = QHBoxLayout(g)
             s_ = self.engine.cfg["server"]
@@ -5673,6 +5819,18 @@ if not HEADLESS:
             h.addWidget(_btn("🛡 Firewall", self._firewall))
             lay.addWidget(g)
             return w
+
+        def _phone_guide_pdf(self):
+            try:
+                data = build_setup_pdf(self.engine.server_urls(force=True), bool(self.engine.cfg["server"].get("pin")), APP_VERSION)
+                os.makedirs(EXPORT_DIR, exist_ok=True)
+                fn = os.path.join(EXPORT_DIR, "AirSense_Phone_Setup_GR_EN.pdf")
+                with open(fn, "wb") as f:
+                    f.write(data)
+                QDesktopServices.openUrl(QUrl.fromLocalFile(fn))
+                self.engine.log(f"Οδηγός κινητού PDF: {fn}")
+            except Exception as e:
+                QMessageBox.warning(self, APP_NAME, f"Δεν έγινε το PDF:\n{e}")
 
         def _apply_server(self):
             s = self.engine.cfg["server"]

@@ -22,6 +22,21 @@ fun SettingsScreen(vm: MainViewModel, ui: UiState) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(14.dp)) {
         SectionTitle(tr("Σύνδεση με τον υπολογιστή", "Connection to PC"))
         HCard { ConnectionForm(vm) { vm.refreshNow() } }
+        HCard {
+            Text(tr("📄 Οδηγός κινητού (PDF)", "📄 Phone guide (PDF)"), fontWeight = FontWeight.Bold)
+            Text(
+                tr("Ελληνικά + English, με τα QR του server σου — στείλ' τον σε όποιον θέλει να συνδεθεί.",
+                    "Greek + English, with your server's QR codes — send it to anyone who wants to connect."),
+                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(6.dp))
+            OutlinedButton(onClick = {
+                val base = vm.api.currentBase()
+                if (base.isNotBlank()) runCatching {
+                    ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("$base/setup.pdf")))
+                }
+            }) { Text(tr("Άνοιγμα / κοινοποίηση", "Open / share")) }
+        }
 
         SectionTitle(tr("Εμφάνιση", "Appearance"))
         HCard {
