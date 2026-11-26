@@ -14,7 +14,7 @@ Double-click: installs what it needs (PyQt6, paramiko, qrcode) by itself.
 Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM
 """
 APP_NAME = "AirSense Remote"
-APP_VERSION = "1.5.0"
+APP_VERSION = "1.5.1"
 
 import os
 import sys
@@ -446,6 +446,10 @@ class Bus(QObject):
 QSS = """
 * { font-family: 'Segoe UI', 'Noto Sans', sans-serif; font-size: 10.5pt; color: #e6e9ef; }
 QMainWindow, QWidget#root { background: #0f141c; }
+QDialog, QMessageBox, QInputDialog { background: #0f141c; }
+QGroupBox { border: 1px solid #222c3b; border-radius: 12px; margin-top: 14px; padding: 10px 8px 8px; }
+QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 4px; color: #9fb1d0; font-weight: 700; }
+QCheckBox::indicator { width: 18px; height: 18px; }
 QFrame#card { background: #161d29; border: 1px solid #222c3b; border-radius: 14px; }
 QLabel#h1 { font-size: 17pt; font-weight: 700; }
 QLabel#h2 { font-size: 11pt; font-weight: 700; color: #9fb1d0; }
@@ -769,10 +773,34 @@ class SettingsDialog(QDialog):
         lay.addLayout(f)
         lay.addWidget(self.save_pw)
         lay.addWidget(self.auto)
+        # 📱 QR for the phone — follows the fields above as you type
+        qg = QGroupBox("📱 QR for the phone (AirSense app → Add server → scan)")
+        qv = QVBoxLayout(qg)
+        qr_row = QHBoxLayout()
+        self.qr_lan = QrView("🏠 Local")
+        self.qr_ts = QrView("🌍 Tailscale")
+        qr_row.addWidget(self.qr_lan)
+        qr_row.addWidget(self.qr_ts)
+        qv.addLayout(qr_row)
+        n = QLabel("🏠 = same WiFi as the board · 🌍 = from anywhere (4G, other WiFi) with Tailscale ON on the phone.")
+        n.setObjectName("muted")
+        n.setWordWrap(True)
+        qv.addWidget(n)
+        lay.addWidget(qg)
+        for w_ in (self.lan, self.ts):
+            w_.textChanged.connect(self._qr)
+        self.web.valueChanged.connect(self._qr)
+        self._qr()
         bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         bb.accepted.connect(self.ok)
         bb.rejected.connect(self.reject)
         lay.addWidget(bb)
+
+    def _qr(self, *_):
+        wp = self.web.value()
+        lan, ts = self.lan.text().strip(), self.ts.text().strip()
+        self.qr_lan.show_url(f"http://{lan}:{wp}" if lan else "")
+        self.qr_ts.show_url(f"http://{ts}:{wp}" if ts else "")
 
     def find_board(self):
         self.btn_findb.setEnabled(False)
@@ -888,7 +916,13 @@ class Main(QMainWindow):
         v.setSpacing(10)
 
         # top bar
-        top, tl = card()
+        top, tl0 = card()
+        self.top_h = QHBoxLayout()
+        self.top_h.setSpacing(14)
+        tl = QVBoxLayout()
+        tl.setSpacing(8)
+        self.top_h.addLayout(tl, 1)
+        tl0.addLayout(self.top_h)
         row = FlowLayout(spacing=8)
         self.btn_menu = QPushButton("☰")
         self.btn_menu.setObjectName("pri")
@@ -1002,7 +1036,15 @@ class Main(QMainWindow):
         ov = QWidget()
         ol = QVBoxLayout(ov)
         ol.setContentsMargins(0, 6, 0, 0)
-        sc, sl = card()
+        sc = QFrame()                                   # 🌡 live sensors → top-right corner of the window
+        sc.setObjectName("sensp")
+        sc.setStyleSheet("QFrame#sensp{background:#0f141c;border:1px solid #222c3b;border-radius:12px}")
+        sc.setMinimumWidth(340)
+        sc.setMaximumWidth(520)
+        sc.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        sl = QVBoxLayout(sc)
+        sl.setContentsMargins(12, 8, 12, 8)
+        sl.setSpacing(4)
         sh = QHBoxLayout()
         h = QLabel("🌡 Sensors (live)")
         h.setObjectName("h2")
@@ -1024,7 +1066,7 @@ class Main(QMainWindow):
         self.sens_empty.setObjectName("muted")
         self.sens_box.addWidget(self.sens_empty)
         sl.addLayout(self.sens_box)
-        ol.addWidget(sc)
+        self.top_h.addWidget(sc, 0, Qt.AlignmentFlag.AlignTop)
         stc, stl = card()
         hr = QHBoxLayout()
         h = QLabel("🩺 Board status")
@@ -1049,23 +1091,7 @@ class Main(QMainWindow):
         stl.addWidget(self.tree, 1)
         ol.addWidget(stc, 1)
         left.addTab(ov, "📊 Overview")
-        # — QR tab
-        qw = QWidget()
-        ql = QVBoxLayout(qw)
-        qc, qcl = card("📱 Scan with the phone (AirSense app → Add server)")
-        qr_row = QHBoxLayout()
-        self.qr_lan = QrView("🏠 Local")
-        self.qr_ts = QrView("🌍 Tailscale")
-        qr_row.addWidget(self.qr_lan)
-        qr_row.addWidget(self.qr_ts)
-        qcl.addLayout(qr_row)
-        n = QLabel("Tailscale works from anywhere (4G, other WiFi) while Tailscale is ON on the phone.")
-        n.setObjectName("muted")
-        n.setWordWrap(True)
-        qcl.addWidget(n)
-        ql.addWidget(qc)
-        ql.addStretch()
-        left.addTab(qw, "📱 QR")
+        left.tabBar().hide()                            # one page: Overview (QR → ⚙ Settings)
         split.addWidget(left)
 
         # right: commands + terminal
@@ -1237,9 +1263,7 @@ class Main(QMainWindow):
         return ""
 
     def _update_qr(self):
-        wp = self.cfg.get("web_port", 8765)
-        self.qr_lan.show_url(f"http://{self.cfg['lan']}:{wp}" if self.cfg.get("lan") else "")
-        self.qr_ts.show_url(f"http://{self.cfg['tailscale']}:{wp}" if self.cfg.get("tailscale") else "")
+        pass                                            # the QR codes live in ⚙ Settings (built when it opens)
 
     # ── connection ──
     def toggle_conn(self):
@@ -1452,13 +1476,12 @@ class Main(QMainWindow):
             dot.setStyleSheet(f"color:{'#2ecc71' if d.get('online') else '#ff5c5c'}; font-size:16pt")
             h.addWidget(dot)
             nm = QLabel(f"<b>{d.get('name') or d.get('id')}</b><br><span style='color:#7d8799'>{d.get('ip')} · {d.get('type') or ''}</span>")
-            nm.setWordWrap(True)
-            nm.setMinimumWidth(40)
-            nm.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+            nm.setMinimumWidth(60)
+            nm.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
             h.addWidget(nm, 1)
             t, hu = d.get("t"), d.get("h")
-            val = QLabel(f"<span style='color:#ff9f43;font-size:18pt;font-weight:700'>{'—' if t is None else f'{t:.1f}°C'}</span>"
-                         f"&nbsp;&nbsp;<span style='color:#4da3ff;font-size:18pt;font-weight:700'>{'—' if hu is None else f'{hu:.1f}%'}</span>")
+            val = QLabel(f"<span style='color:#ff9f43;font-size:17pt;font-weight:700'>{'—' if t is None else f'{t:.1f}°C'}</span>"
+                         f"&nbsp;&nbsp;<span style='color:#4da3ff;font-size:17pt;font-weight:700'>{'—' if hu is None else f'{hu:.1f}%'}</span>")
             h.addWidget(val)
             fr.setToolTip(f"dew point {d.get('dp')} °C · absolute {d.get('ah')} g/m³\n{d.get('error') or ''}")
             self.sens_box.addWidget(fr)
