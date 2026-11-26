@@ -15,7 +15,7 @@ Developer : Nikolaos K. Paridis (aka nikkpap) — ALU DEV TEAM
 APP_NAME = "AirSense"
 OLD_APP_NAMES = ("ALU HygroLink", "ALU AirSense")   # παλιά ονόματα (μεταφορά δεδομένων/ρυθμίσεων)
 OLD_APP_NAME = OLD_APP_NAMES[0]
-APP_VERSION = "1.7.0"
+APP_VERSION = "1.7.1"
 AUTHOR = "Nikolaos K. Paridis (aka nikkpap)"
 TEAM = "ALU DEV TEAM"
 
@@ -2124,8 +2124,22 @@ def smtp_check(e):
             pass
 
 
+def mail_list(text):
+    """«a@x.gr; b@y.gr» (ή με κόμμα / κενό / νέα γραμμή) → λίστα email χωρίς διπλά."""
+    out = []
+    for x in re.split(r"[;,\s]+", str(text or "")):
+        x = x.strip().strip("<>")
+        if x and x.lower() not in [o.lower() for o in out]:
+            out.append(x)
+    return out
+
+
+def mail_join(text):
+    return "; ".join(mail_list(text))
+
+
 def send_mail(e, subject, body, attachments=()):
-    to = [x.strip() for x in re.split(r"[,;]", e.get("to", "")) if x.strip()]
+    to = mail_list(e.get("to", ""))
     if not e.get("host") or not to:
         raise RuntimeError("Συμπληρώστε SMTP server και παραλήπτη")
     msg = EmailMessage()
@@ -2702,7 +2716,7 @@ class Engine:
         with self.lock:
             e["oauth_refresh"] = ""
             if to.strip():
-                e["to"] = to.strip()
+                e["to"] = mail_join(to)
             self._mail_ready(e)
             self.cfg["email"].clear()
             self.cfg["email"].update(e)
@@ -3134,7 +3148,7 @@ button.pri{background:#2b6cff!important;color:#fff}.badge{background:#e6eaf2}.wa
     <label>SMTP server<input id="ehost"></label><label>Θύρα<input id="eport" type="number"></label>
     <label>Ασφάλεια<select id="esec"><option>STARTTLS</option><option>SSL</option><option>Κανένα</option></select></label>
     <label>Χρήστης<input id="euser"></label><label>Κωδικός <span class="mut" id="epwh"></span><input id="epw" type="password" placeholder="(αμετάβλητος)"></label>
-    <label>Αποστολέας<input id="efrom"></label><label>Παραλήπτες<input id="eto" placeholder="a@x.gr, b@y.gr"></label>
+    <label>Αποστολέας<input id="efrom"></label><label>Παραλήπτες<input id="eto" placeholder="a@x.gr; b@y.gr"></label>
     <label>Ώρα αναφοράς<input id="etime" placeholder="08:00"></label>
    </div>
    <div class="row"><label><input type="checkbox" id="een"> Ενεργό</label><label><input type="checkbox" id="edaily"> Ημερήσια αναφορά</label><label><input type="checkbox" id="ealarm"> Email σε ειδοποίηση</label></div>
@@ -3492,6 +3506,8 @@ def make_handler(engine):
                             for k in ("host", "security", "user", "sender", "to", "report_time"):
                                 if k in body:
                                     e[k] = str(body[k]).strip()
+                            if "to" in body:
+                                e["to"] = mail_join(e["to"])
                             if body.get("enabled") and not e.get("enabled"):
                                 engine.cfg["last_report_date"] = datetime.now().strftime("%Y-%m-%d")  # πρώτη αναφορά αύριο
                             for k in ("enabled", "daily_report", "alarm_mails"):
@@ -6341,7 +6357,7 @@ if not HEADLESS:
             self.em_from = QLineEdit(e.get("sender", ""))
             self.em_from.setPlaceholderText("κενό = ίδιο με χρήστη")
             self.em_to = QLineEdit(e.get("to", ""))
-            self.em_to.setPlaceholderText("a@x.gr, b@y.gr")
+            self.em_to.setPlaceholderText("a@x.gr; b@y.gr  (πολλοί παραλήπτες με ;)")
             preset = QComboBox()
             preset.addItems(["— Γρήγορη ρύθμιση —", "Gmail", "Outlook / Hotmail", "Yahoo"])
             preset.currentTextChanged.connect(self._preset)
@@ -6474,7 +6490,7 @@ if not HEADLESS:
             pw = QLineEdit()
             pw.setPlaceholderText("abcd efgh ijkl mnop")
             to = QLineEdit(self.em_to.text())
-            to.setPlaceholderText("κενό = στο ίδιο email")
+            to.setPlaceholderText("κενό = στο ίδιο email · πολλοί: a@x.gr; b@y.gr")
             fl.addRow("Gmail:", u)
             fl.addRow("", _btn("🔑  Φτιάξε κωδικό εφαρμογής", lambda: QDesktopServices.openUrl(QUrl(GMAIL_APP_PW))))
             fl.addRow("Κωδικός εφαρμογής:", pw)
@@ -6627,7 +6643,7 @@ if not HEADLESS:
             e.update(enabled=self.em_en.isChecked(), host=self.em_host.text().strip(), port=self.em_port.value(),
                      security=self.em_sec.currentText(), user=self.em_user.text().strip(),
                      sender=self.em_from.text().strip(),
-                     to=self.em_to.text().strip(), daily_report=self.em_daily.isChecked(),
+                     to=mail_join(self.em_to.text()), daily_report=self.em_daily.isChecked(),
                      attach_pdf=self.em_pdf.isChecked(),
                      report_time=self.em_time.time().toString("HH:mm"), alarm_mails=self.al_mail.isChecked())
             if e.get("auth") != "oauth_ms":
