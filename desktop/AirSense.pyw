@@ -15,7 +15,7 @@ Developer : Nikolaos K. Paridis (aka nikkpap) — ALU DEV TEAM
 APP_NAME = "AirSense"
 OLD_APP_NAMES = ("ALU HygroLink", "ALU AirSense")   # παλιά ονόματα (μεταφορά δεδομένων/ρυθμίσεων)
 OLD_APP_NAME = OLD_APP_NAMES[0]
-APP_VERSION = "1.6.20"
+APP_VERSION = "1.6.21"
 AUTHOR = "Nikolaos K. Paridis (aka nikkpap)"
 TEAM = "ALU DEV TEAM"
 
@@ -5096,7 +5096,7 @@ if not HEADLESS:
             self.tabs = tabs
             self.setCentralWidget(tabs)
             self.T = {}
-            for key, fn, title in (("home", self._tab_home, "🏠 Αρχική"), ("dash", self._tab_dashboard, "📊 Γραφήματα"),
+            for key, fn, title in (("home", self._tab_home, "🏠 Αρχική · 🚀 Ρύθμιση"), ("dash", self._tab_dashboard, "📊 Γραφήματα"),
                                    ("weather", self._tab_weather, "🌦 Καιρός"),
                                    ("devices", self._tab_devices, "📡 Αισθητήρες"),
                                    ("server", self._tab_server, "📱 Κινητό"),
@@ -5168,47 +5168,97 @@ if not HEADLESS:
             self.home_vals.setWordWrap(True)
             self.home_vals.setStyleSheet("font-size:13pt;background:#171c26;border:1px solid #262d3b;border-radius:14px;padding:14px")
             lay.addWidget(self.home_vals)
+            # ── 🚀 Easy setup: 4 steps, the next one in blue, then it folds away ──
+            sg = QFrame()
+            sg.setObjectName("card")
+            sl = QVBoxLayout(sg)
+            sl.setContentsMargins(16, 12, 16, 12)
+            sl.setSpacing(8)
+            top = QHBoxLayout()
+            self.setup_title = QLabel("🚀 <b>Εύκολη ρύθμιση</b>")
+            self.setup_title.setStyleSheet("font-size:14pt")
+            top.addWidget(self.setup_title)
+            top.addStretch()
+            self.setup_toggle = _btn("▾ Βήματα", self._toggle_setup)
+            top.addWidget(self.setup_toggle)
+            sl.addLayout(top)
+            self.setup_bar = QProgressBar()
+            self.setup_bar.setRange(0, 4)
+            self.setup_bar.setFormat("%v / 4")
+            sl.addWidget(self.setup_bar)
+            self.setup_next = _btn("", None, True)
+            self.setup_next.setMinimumHeight(48)
+            self.setup_next.setStyleSheet("font-size:13pt")
+            self.setup_next.clicked.connect(lambda: self._setup_next_fn and self._setup_next_fn())
+            self._setup_next_fn = None
+            sl.addWidget(self.setup_next)
+            self.setup_body = QWidget()
+            grid = QGridLayout(self.setup_body)
+            grid.setContentsMargins(0, 4, 0, 0)
+            grid.setVerticalSpacing(6)
+            self.chk_rows = {}
+            self._steps = (
+                ("sensor", "1", "Αισθητήρας στο WiFi",
+                 "Ο αισθητήρας στο ρεύμα → ο οδηγός τον βάζει στο WiFi σου (2.4 GHz) και τον βρίσκει.",
+                 "🧙 Οδηγός αισθητήρα", lambda: self.open_wizard()),
+                ("log", "2", "Μετρήσεις",
+                 "Ο αισθητήρας απαντά και γράφονται μετρήσεις (κάθε λεπτό).",
+                 "🔍 Βρες αισθητήρες", lambda: self.open_wizard(P_FIND)),
+                ("server", "3", "Κινητό (ίδιο WiFi)",
+                 "Στο κινητό: εφαρμογή AirSense → «Βρες αυτόματα». Ή στείλε τον έτοιμο PDF οδηγό.",
+                 "📄 PDF οδηγός κινητού", lambda: self._phone_guide_pdf()),
+                ("ts", "4", "Από παντού (Tailscale)",
+                 "Για 4G / άλλο WiFi: Tailscale σε υπολογιστή + κινητό, ίδιος λογαριασμός.",
+                 "🌍 Ρύθμιση Tailscale", lambda: self.open_wizard(P_PHONE)),
+            )
+            for r, (k, num, title, desc, bt, fn) in enumerate(self._steps):
+                badge = QLabel(num)
+                badge.setFixedSize(30, 30)
+                badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                lb = QLabel(f"<b>{title}</b><br><span style='color:#8b96ab'>{desc}</span>")
+                lb.setTextFormat(Qt.TextFormat.RichText)
+                lb.setWordWrap(True)
+                b = _btn(bt, fn)
+                b.setMinimumWidth(190)
+                grid.addWidget(badge, r, 0)
+                grid.addWidget(lb, r, 1)
+                grid.addWidget(b, r, 2)
+                self.chk_rows[k] = (badge, b, True)
+            grid.setColumnStretch(1, 1)
+            # optional extras, in one line
+            ex = QHBoxLayout()
+            ex.addWidget(QLabel("<span style='color:#8b96ab'>Προαιρετικά:</span>"))
+            self.opt_email = _btn("✉ Email αναφορές", self.show_email)
+            self.opt_wx = _btn("🌦 Καιρός", lambda: self.tabs.setCurrentWidget(self.T["weather"]))
+            self.opt_auto = _btn("🖥 Εκκίνηση με Windows", lambda: self.cb_auto.setChecked(True))
+            for b in (self.opt_email, self.opt_wx, self.opt_auto):
+                ex.addWidget(b)
+            ex.addStretch()
+            grid.addLayout(ex, len(self._steps), 0, 1, 3)
+            self.setup_body.setStyleSheet("background:transparent")
+            sl.addWidget(self.setup_body)
+            self._setup_open = None          # None = automatic (open until everything is ready)
+            lay.addWidget(sg)
+
+            # ── everyday shortcuts ──
             tiles = QGridLayout()
             for i, (text, fn) in enumerate((
-                    ("🧙\nΟδηγός εγκατάστασης", lambda: self.open_wizard()),
-                    ("📶\nΑναζήτηση WiFi", lambda: self.open_wizard(P_AP)),
-                    ("🔍\nΒρες αισθητήρες", lambda: self.open_wizard(P_FIND)),
-                    ("📱\nΣύνδεση κινητού", lambda: self.open_wizard(P_PHONE)),
                     ("📊\nΓραφήματα", lambda: self.tabs.setCurrentWidget(self.T["dash"])),
                     ("🌦\nΚαιρός", lambda: self.tabs.setCurrentWidget(self.T["weather"])),
-                    ("💾\nΛήψη CSV / XML", lambda: self.tabs.setCurrentWidget(self.T["export"])),
-                    ("✉\nEmail", self.show_email),
-                    ("🔁\nΑλλαγή WiFi / Reset", self.open_move),
+                    ("📱\nΚινητό (QR / PDF)", lambda: self.tabs.setCurrentWidget(self.T["server"])),
+                    ("💾\nΛήψη CSV / PDF", lambda: self.tabs.setCurrentWidget(self.T["export"])),
+                    ("🔁\nΑισθητήρας σε νέο WiFi", self.open_move),
                     ("❓\nΒοήθεια", lambda: self.tabs.setCurrentWidget(self.T["help"])))):
                 b = _btn(text, fn)
                 b.setObjectName("tile")
-                tiles.addWidget(b, i // 5, i % 5)
+                tiles.addWidget(b, i // 6, i % 6)
             lay.addLayout(tiles)
-            g = QGroupBox("Τι είναι έτοιμο;")
-            grid = QGridLayout(g)
-            self.chk_rows = {}
-            items = (("sensor", "Αισθητήρας συνδεδεμένος", "🧙 Οδηγός", lambda: self.open_wizard(), True),
-                     ("log", "Καταγραφή μετρήσεων", "⟳ Μέτρηση τώρα", self.engine.poll_now, True),
-                     ("server", "Πρόσβαση από κινητό (ίδιο WiFi)", "📱 Ρύθμιση", lambda: self.open_wizard(P_PHONE), True),
-                     ("ts", "Πρόσβαση από παντού — Tailscale (προαιρετικό)", "📱 Ρύθμιση", lambda: self.open_wizard(P_PHONE), False),
-                     ("email", "Email αναφορές (προαιρετικό)", "✉ Ρύθμιση", self.show_email, False),
-                     ("wx", "Εξωτερικός καιρός Open-Meteo (προαιρετικό)", "🌦 Ρύθμιση",
-                      lambda: self.tabs.setCurrentWidget(self.T["weather"]), False),
-                     ("auto", "Εκκίνηση με τα Windows (προαιρετικό)", "Ενεργοποίηση", lambda: self.cb_auto.setChecked(True), False))
-            for i, (k, text, bt, fn, req) in enumerate(items):
-                ic = QLabel()
-                ic.setStyleSheet("font-size:14pt")
-                lb = QLabel(text)
-                lb.setStyleSheet("font-size:11.5pt")
-                b = _btn(bt, fn)
-                grid.addWidget(ic, i, 0)
-                grid.addWidget(lb, i, 1)
-                grid.addWidget(b, i, 2)
-                self.chk_rows[k] = (ic, b, req)
-            grid.setColumnStretch(1, 1)
-            lay.addWidget(g)
             lay.addStretch()
             return w
+
+        def _toggle_setup(self):
+            self._setup_open = not self.setup_body.isVisible()
+            self._update_home()
 
         def _update_home(self):
             e = self.engine
@@ -5256,14 +5306,45 @@ if not HEADLESS:
                              f"</span></span>")
             parts += diffs
             self.home_vals.setText("<br>".join(parts) if parts else
-                                   "👋 Δεν υπάρχει ακόμα αισθητήρας.<br>Πάτα <b>🧙 Οδηγός εγκατάστασης</b> για να ξεκινήσεις.")
+                                   "👋 Δεν υπάρχει ακόμα αισθητήρας.<br>Πάτα το μπλε κουμπί <b>▶ Επόμενο</b> παρακάτω — σε πάει βήμα-βήμα.")
             state = {"sensor": any_on, "log": recent, "server": e.httpd is not None,
                      "ts": bool((e._ts_cache[1] or {}).get("ip")), "email": bool(e.cfg["email"].get("enabled")),
                      "auto": self.cb_auto.isChecked(), "wx": bool(self.engine.wx_snapshot())}
-            for k, (ic, b, req) in self.chk_rows.items():
+            done = 0
+            nxt = None
+            for k, num, title, _d, bt, fn in self._steps:
+                badge, b, _req = self.chk_rows[k]
                 ok = state[k]
-                ic.setText("✅" if ok else ("❌" if req else "⚪"))
-                b.setVisible(not ok)
+                done += ok
+                if ok:
+                    badge.setText("✓")
+                    badge.setStyleSheet("background:#2ecc71;color:#ffffff;border-radius:15px;font-weight:700;font-size:12pt")
+                elif nxt is None:
+                    nxt = (num, title, bt, fn)
+                    badge.setText(num)
+                    badge.setStyleSheet("background:#2b6cff;color:#ffffff;border-radius:15px;font-weight:700;font-size:12pt")
+                else:
+                    badge.setText(num)
+                    badge.setStyleSheet("background:#262d3b;color:#8b96ab;border-radius:15px;font-weight:700;font-size:12pt")
+                b.setText(bt if not ok else "✓ " + bt.split(" ", 1)[-1])
+            self.setup_bar.setValue(done)
+            self.opt_email.setVisible(not state["email"])
+            self.opt_wx.setVisible(not state["wx"])
+            self.opt_auto.setVisible(not state["auto"])
+            if nxt:
+                num, title, bt, fn = nxt
+                self.setup_title.setText(f"🚀 <b>Εύκολη ρύθμιση</b> &nbsp;<span style='color:#8b96ab'>— βήμα {num} από 4</span>")
+                self.setup_next.setText(f"▶  Επόμενο: {title}  —  {bt}")
+                self._setup_next_fn = fn
+                self.setup_next.setVisible(True)
+            else:
+                self.setup_title.setText("✅ <b>Όλα έτοιμα</b> &nbsp;<span style='color:#8b96ab'>— αισθητήρας, μετρήσεις, κινητό, από παντού</span>")
+                self.setup_next.setVisible(False)
+                self._setup_next_fn = None
+            show = self._setup_open if self._setup_open is not None else bool(nxt)
+            self.setup_body.setVisible(show)
+            self.setup_bar.setVisible(bool(nxt))
+            self.setup_toggle.setText("▴ Απόκρυψη" if show else "▾ Βήματα")
 
         # ── Πίνακας ──
         def _tab_dashboard(self):

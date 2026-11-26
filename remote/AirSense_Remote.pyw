@@ -14,7 +14,7 @@ Double-click: installs what it needs (PyQt6, paramiko, qrcode) by itself.
 Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM
 """
 APP_NAME = "AirSense Remote"
-APP_VERSION = "1.3.1"
+APP_VERSION = "1.4.0"
 
 import os
 import sys
@@ -757,6 +757,61 @@ class Main(QMainWindow):
 
         # left: sensors + status + QR
         left = QTabWidget()
+        self.left_tabs = left
+        ez = QWidget()
+        el = QVBoxLayout(ez)
+        el.setContentsMargins(0, 6, 0, 0)
+        ec, ecl = card()
+        self.ez_title = QLabel("🚀 <b>Easy setup</b>")
+        self.ez_title.setStyleSheet("font-size:13pt")
+        ecl.addWidget(self.ez_title)
+        self.ez_bar = QFrame()
+        self.ez_bar.setFixedHeight(8)
+        self.ez_bar_fill = QFrame(self.ez_bar)
+        self.ez_bar.setStyleSheet("background:#222c3b;border-radius:4px")
+        self.ez_bar_fill.setStyleSheet("background:#2b6cff;border-radius:4px")
+        ecl.addWidget(self.ez_bar)
+        self.ez_next = QPushButton("")
+        self.ez_next.setObjectName("pri")
+        self.ez_next.setMinimumHeight(46)
+        self.ez_next.setStyleSheet("font-size:12pt")
+        self.ez_next.clicked.connect(lambda: self._ez_next_fn and self._ez_next_fn())
+        self._ez_next_fn = None
+        ecl.addWidget(self.ez_next)
+        self.ez_rows = {}
+        self.EZ = (
+            ("board", "1", "Board on the network", "Board on power (+ cable for Luckfox). The program finds it and connects.",
+             "🔍 Find board / 🔌 Connect", self._ez_board),
+            ("install", "2", "AirSense on the board", "New board? One click installs everything (5–20 min). Answer with Enter.",
+             "⬇ Install on board", lambda: self.preset(GET_SH, "install", "⬇ Install on board")),
+            ("sensor", "3", "Sensor found", "Sensor on the WiFi (2.4 GHz) → the board finds it by itself.",
+             "🔎 Find sensor", lambda: self.find_sensor(quiet=False)),
+            ("phone", "4", "Phone", "AirSense app → «Find automatically». Or send the ready PDF guide with the QR codes.",
+             "📄 Phone guide (PDF)", self.phone_guide),
+            ("ts", "5", "From anywhere (Tailscale)", "4G / other WiFi: Tailscale on the board + phone, same account.",
+             "🌍 Tailscale login", lambda: self.preset("airsense tailscale", "run", "Tailscale")),
+        )
+        for k, num, title, desc, bt, fn in self.EZ:
+            row = QHBoxLayout()
+            badge = QLabel(num)
+            badge.setFixedSize(30, 30)
+            badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            lb = QLabel(f"<b>{title}</b><br><span style='color:#7d8799'>{desc}</span>")
+            lb.setWordWrap(True)
+            b = QPushButton(bt)
+            b.setMinimumWidth(175)
+            b.clicked.connect(fn)
+            row.addWidget(badge)
+            row.addWidget(lb, 1)
+            row.addWidget(b)
+            ecl.addLayout(row)
+            self.ez_rows[k] = (badge, b)
+        tip = QLabel("<span style='color:#7d8799'>Moved / new WiFi? Only step 3 again — the rest finds the new addresses by itself.</span>")
+        tip.setWordWrap(True)
+        ecl.addWidget(tip)
+        el.addWidget(ec)
+        el.addStretch()
+        left.addTab(ez, "🚀 Easy setup")
         # — Overview tab
         ov = QWidget()
         ol = QVBoxLayout(ov)
@@ -831,15 +886,39 @@ class Main(QMainWindow):
         right = QWidget()
         rl = QVBoxLayout(right)
         rl.setContentsMargins(0, 0, 0, 0)
-        cc, ccl = card("⚡ Commands")
-        grid = QGridLayout()
+        cc, ccl = card()
+        chd = QHBoxLayout()
+        h = QLabel("⚡ Commands")
+        h.setObjectName("h2")
+        chd.addWidget(h)
+        chd.addStretch()
+        self.btn_more = QPushButton("▸ All commands")
+        self.btn_more.setToolTip("Show / hide every command (advanced)")
+        self.btn_more.clicked.connect(self._toggle_more)
+        chd.addWidget(self.btn_more)
+        ccl.addLayout(chd)
+        quick = QHBoxLayout()
+        quick.setSpacing(6)
+        QUICK = (("🩺 Status", "airsense status", "status"), ("⬇ Update", "airsense update", "run"),
+                 ("🔎 Find sensor", "", "find"), ("📄 Phone guide", "", "guide"),
+                 ("↻ Restart", "airsense restart", "run"), ("📜 Logs", "airsense logs", "run"))
+        self.cmd_buttons = []
+        for label, cmd, kind in QUICK:
+            b = QPushButton(label)
+            b.setMinimumHeight(38)
+            b.clicked.connect(lambda _=False, c=cmd, k=kind, lb=label: self.preset(c, k, lb))
+            quick.addWidget(b)
+            self.cmd_buttons.append(b)
+        ccl.addLayout(quick)
+        self.more_box = QWidget()
+        grid = QGridLayout(self.more_box)
+        grid.setContentsMargins(0, 6, 0, 0)
         grid.setHorizontalSpacing(6)
         grid.setVerticalSpacing(6)
         groups = []
         for g, *_ in COMMANDS:
             if g not in groups:
                 groups.append(g)
-        self.cmd_buttons = []
         for gi, g in enumerate(groups):
             gl = QLabel(g)
             gl.setObjectName("muted")
@@ -852,7 +931,9 @@ class Main(QMainWindow):
                 b.clicked.connect(lambda _=False, c=cmd, k=kind, lb=label: self.preset(c, k, lb))
                 grid.addWidget(b, gi, ci + 1)
                 self.cmd_buttons.append(b)
-        ccl.addLayout(grid)
+        ccl.addWidget(self.more_box)
+        self.more_box.setVisible(bool(self.cfg.get("show_all_commands", False)))
+        self.btn_more.setText("▾ Fewer commands" if self.more_box.isVisible() else "▸ All commands")
         rl.addWidget(cc)
 
         tc, tcl = card()
@@ -1053,6 +1134,8 @@ class Main(QMainWindow):
 
     def _set_connected_ui(self, on):
         self.btn_conn.setText("⏏ Disconnect" if on else "🔌 Connect")
+        if hasattr(self, "ez_rows"):
+            QTimer.singleShot(0, self._update_ez)
         for b in self.cmd_buttons:
             b.setEnabled(on)
         if hasattr(self, "btn_find"):
@@ -1139,6 +1222,7 @@ class Main(QMainWindow):
                 continue
             self.led[k].set(s, tip)
         self.led_time.setText("checked " + time.strftime("%H:%M:%S"))
+        self._update_ez()
         st = res.get("sensor", ("off", ""))[0]
         self._sensor_bad = self._sensor_bad + 1 if st in ("bad", "warn") else 0
         if (self.chk_autofind.isChecked() and self._sensor_bad >= 2 and not self._finding and self.chan is None
@@ -1238,6 +1322,62 @@ class Main(QMainWindow):
         elif out.strip():
             self.st_sum.setText("<span style='color:#2ecc71'>✔ All good</span>")
             self.led["health"].set("ok", "airsense status: all good")
+
+    # ── 🚀 easy setup ──
+    def _toggle_more(self):
+        on = not self.more_box.isVisible()
+        self.more_box.setVisible(on)
+        self.btn_more.setText("▾ Fewer commands" if on else "▸ All commands")
+        self.cfg["show_all_commands"] = on
+        save_cfg(self.cfg)
+
+    def _ez_board(self):
+        if self.conn and self.conn.alive:
+            return
+        if not (self.cfg.get("lan") or self.cfg.get("tailscale")) or not self.cfg.get("_pw"):
+            d = SettingsDialog(self, self.cfg)
+            QTimer.singleShot(300, d.find_board)
+            if not d.exec():
+                return
+            self._update_qr()
+        self.connect_ssh()
+
+    def _update_ez(self):
+        L = {k: v.state for k, v in self.led.items()}
+        conn = bool(self.conn and self.conn.alive)
+        state = {"board": conn, "install": L["web"] == "ok", "sensor": L["sensor"] == "ok",
+                 "phone": L["web"] == "ok", "ts": L["ts"] == "ok"}
+        done, nxt = 0, None
+        for k, num, title, _d, bt, fn in self.EZ:
+            badge, b = self.ez_rows[k]
+            ok = state[k]
+            done += ok
+            if ok:
+                badge.setText("✓")
+                badge.setStyleSheet("background:#2ecc71;color:#fff;border-radius:15px;font-weight:700")
+            elif nxt is None:
+                nxt = (num, title, bt, fn)
+                badge.setText(num)
+                badge.setStyleSheet("background:#2b6cff;color:#fff;border-radius:15px;font-weight:700")
+            else:
+                badge.setText(num)
+                badge.setStyleSheet("background:#222c3b;color:#7d8799;border-radius:15px;font-weight:700")
+            b.setText(("✓ " + bt.split(" ", 1)[-1]) if ok else bt)
+        w = self.ez_bar.width()
+        self.ez_bar_fill.setGeometry(0, 0, int(w * done / len(self.EZ)), 8)
+        if nxt:
+            num, title, bt, fn = nxt
+            self.ez_title.setText(f"🚀 <b>Easy setup</b> <span style='color:#7d8799'>— step {num} of {len(self.EZ)}</span>")
+            self.ez_next.setText(f"▶  Next: {title} — {bt}")
+            self._ez_next_fn = fn
+            self.ez_next.setVisible(True)
+        else:
+            self.ez_title.setText("✅ <b>All ready</b> <span style='color:#7d8799'>— board, AirSense, sensor, phone, from anywhere</span>")
+            self.ez_next.setVisible(False)
+            self._ez_next_fn = None
+        if not getattr(self, "_ez_tab_chosen", False) and self.led_time.text():
+            self._ez_tab_chosen = True                  # first check: open on Easy setup only while something is missing
+            self.left_tabs.setCurrentIndex(0 if nxt else 1)
 
     # ── 📄 phone guide PDF (made by the board's server) ──
     def phone_guide(self, open_it=True):
