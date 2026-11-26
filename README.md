@@ -12,6 +12,17 @@ Monitoring, logging and alerts for **BleBox humiditySensor** sensors: charts, Op
 inside–outside difference with ventilation advice, **PDF reports**, CSV/XML, email, and access from your phone
 (on the local network or from anywhere with Tailscale). *(formerly ALU HygroLink)*
 
+## 🚀 Start here — 5 steps (no Linux knowledge needed)
+| # | What | How |
+|---|---|---|
+| 1 | **Card for the board** | Raspberry Pi: [Raspberry Pi Imager](https://www.raspberrypi.com/software/) → Raspberry Pi OS Lite (64-bit), hostname `airsense`, your user/password, WiFi, SSH on. · Luckfox: Ubuntu image + SocToolKit ([guide](luckfox/ODIGIES_Luckfox.md)). Board on power (+ cable for Luckfox). |
+| 2 | **Install AirSense on the board** | On Windows open **`AirSense_Remote_vX.pyw`** → it opens **🔍 Find board** by itself → pick the board → user/password (Luckfox: `pico` / `luckfox`) → **⬇ Install on board** → answer with Enter. *(Or by ssh: the one command below.)* |
+| 3 | **Sensor on the WiFi** | Sensor on power → on the PC **AirSense** → 📡 Sensors → **🧙 New sensor** (or phone: WiFi `humiditySensor-…` → wBox app) → your **2.4 GHz** WiFi. **The board finds it by itself** (within 5 min) — or **🔎 Find sensor** in AirSense Remote. |
+| 4 | **Phone** | Install **`AirSense-Android_vX.apk`** → **🔍 Find automatically** (phone on the same WiFi) → PIN if asked. Done. |
+| 5 | **From anywhere** | Board: Tailscale = **Y** in the installer. Phone: **Tailscale** app, same account → ON. The app already knows the address (it learns it from the board). Others: [Access for another person](#-access-for-another-person-eg-a-colleague-in-athens-with-an-android-phone--luckfox--raspberry-pi). |
+
+**Moved to another place / new WiFi?** Only step 3 again — the board, the app and AirSense Remote find the new addresses by themselves.
+
 ## 📌 How it works
 ```
  BleBox sensors ──WiFi──►  AirSense server  ──►  web page :8765  ──►  phone (Android app / browser)
@@ -308,6 +319,17 @@ Remote access: [Tailscale](https://tailscale.com)
 **Developer:** Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM
 
 ---
+
+## 🚀 Ξεκίνα από εδώ — 5 βήματα (χωρίς γνώσεις Linux)
+| # | Τι | Πώς |
+|---|---|---|
+| 1 | **Κάρτα για την πλακέτα** | Raspberry Pi: [Raspberry Pi Imager](https://www.raspberrypi.com/software/) → Raspberry Pi OS Lite (64-bit), hostname `airsense`, χρήστης/κωδικός σου, WiFi, SSH ON. · Luckfox: εικόνα Ubuntu + SocToolKit ([οδηγός](luckfox/ODIGIES_Luckfox.md)). Πλακέτα στο ρεύμα (+ καλώδιο για Luckfox). |
+| 2 | **Εγκατάσταση AirSense στην πλακέτα** | Στα Windows άνοιξε το **`AirSense_Remote_vX.pyw`** → ανοίγει μόνο του το **🔍 Find board** → διάλεξε την πλακέτα → χρήστης/κωδικός (Luckfox: `pico` / `luckfox`) → **⬇ Install on board** → απαντάς με Enter. *(Ή με ssh: η μία εντολή παρακάτω.)* |
+| 3 | **Αισθητήρας στο WiFi** | Αισθητήρας στο ρεύμα → στο PC **AirSense** → 📡 Αισθητήρες → **🧙 Νέος αισθητήρας** (ή κινητό: WiFi `humiditySensor-…` → εφαρμογή wBox) → το **2.4 GHz** WiFi σου. **Η πλακέτα τον βρίσκει μόνη της** (μέσα σε 5') — ή **🔎 Find sensor** στο AirSense Remote. |
+| 4 | **Κινητό** | Εγκατάσταση **`AirSense-Android_vX.apk`** → **🔍 Βρες αυτόματα** (κινητό στο ίδιο WiFi) → PIN αν ζητήσει. Τέλος. |
+| 5 | **Από παντού** | Πλακέτα: Tailscale = **Y** στον installer. Κινητό: εφαρμογή **Tailscale**, ίδιος λογαριασμός → ON. Η εφαρμογή ξέρει ήδη τη διεύθυνση (τη μαθαίνει από την πλακέτα). Άλλοι: [Πρόσβαση για άλλον](#-πρόσβαση-για-άλλον-πχ-συνάδελφος-στην-αθήνα-με-android--luckfox--raspberry-pi). |
+
+**Άλλαξες μέρος / WiFi;** Μόνο το βήμα 3 ξανά — πλακέτα, εφαρμογή και AirSense Remote βρίσκουν μόνα τους τις νέες διευθύνσεις.
 
 ## 📌 Πώς δουλεύει
 ```
