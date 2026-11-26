@@ -226,6 +226,7 @@ ok "Answers saved — you can leave it running now"
 # ── 2. Clock + swap ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 step 2 "Clock (time zone + NTP) and swap"
 set_tz() {   # timedatectl is blocked on some images (Luckfox: "Access denied") → write it directly
+  mkdir -p /var/lib/airsense; echo "$1" > /var/lib/airsense/timezone     # re-applied on every boot
   timedatectl set-timezone "$1" 2>/dev/null || { ln -sf "/usr/share/zoneinfo/$1" /etc/localtime && echo "$1" > /etc/timezone; }
   [ "$(readlink -f /etc/localtime)" = "$(readlink -f "/usr/share/zoneinfo/$1")" ]
 }

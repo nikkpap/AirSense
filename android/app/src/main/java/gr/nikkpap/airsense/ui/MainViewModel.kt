@@ -106,7 +106,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     suspend fun refresh(silent: Boolean = false) {
         try {
-            val st = Parse.status(api.get("/api/status"))
+            val sj = api.get("/api/status")
+            val st = Parse.status(sj)
+            learnUrls(sj)
             var sel = _ui.value.selected
             if (sel == null || st.devices.none { it.id == sel }) sel = st.devices.firstOrNull()?.id
             update { it.copy(status = st, online = true, error = null, selected = sel) }
@@ -188,12 +190,35 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     suspend fun testConnection(): String? {
         return try {
-            val st = Parse.status(api.get("/api/status"))
+            val j = api.get("/api/status")
+            val st = Parse.status(j)
+            learnUrls(j)
             update { it.copy(status = st, online = true) }
             null
         } catch (e: Exception) {
             e.message ?: "?"
         }
+    }
+
+    /** The server tells its own addresses → fill the missing Tailscale / local address by itself. */
+    private fun learnUrls(j: org.json.JSONObject) {
+        val ts = gr.nikkpap.airsense.data.Discovery.tailscaleUrl(j)
+        val lan = gr.nikkpap.airsense.data.Discovery.localUrl(j)
+        if (ts != null && prefs.tsUrl != ts) prefs.tsUrl = ts
+        if (lan != null && prefs.localUrl.isBlank()) prefs.localUrl = lan
+    }
+
+    /** 🔍 Find the server on this WiFi, save it and test it — one tap. → null = OK, else the message */
+    suspend fun autoFind(progress: (Int, Int) -> Unit): Pair<String?, String?> {
+        val found = gr.nikkpap.airsense.data.Discovery.find(progress)
+        if (found.isEmpty()) return null to t(
+            "Δεν βρέθηκε server στο WiFi σου. Είναι το κινητό στο ίδιο WiFi με την πλακέτα / το PC; Είναι αναμμένος ο server;",
+            "No server found on your WiFi. Is the phone on the same WiFi as the board / PC? Is the server on?")
+        val url = found.first()
+        prefs.localUrl = url
+        prefs.lastGood = ""
+        val err = testConnection()
+        return url to err
     }
 
     fun finishSetup() {

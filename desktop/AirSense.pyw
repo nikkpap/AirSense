@@ -15,7 +15,7 @@ Developer : Nikolaos K. Paridis (aka nikkpap) — ALU DEV TEAM
 APP_NAME = "AirSense"
 OLD_APP_NAMES = ("ALU HygroLink", "ALU AirSense")   # παλιά ονόματα (μεταφορά δεδομένων/ρυθμίσεων)
 OLD_APP_NAME = OLD_APP_NAMES[0]
-APP_VERSION = "1.6.17"
+APP_VERSION = "1.6.18"
 AUTHOR = "Nikolaos K. Paridis (aka nikkpap)"
 TEAM = "ALU DEV TEAM"
 
@@ -2183,6 +2183,12 @@ class Engine:
     def poll_once(self):
         devs = [d for d in self.devices() if d.get("enabled", True)]
         if not devs:
+            # no sensor yet (e.g. it was not on the WiFi at the first start) → keep looking every 5 minutes
+            now = time.time()
+            if self.cfg.get("auto_add_sensors", True) and now - self._last_rescan > 300:
+                self._last_rescan = now
+                self.log("Δεν υπάρχει αισθητήρας ακόμα — αυτόματη αναζήτηση στο δίκτυο…")
+                self.start_scan(auto=True)
             return
         with ThreadPoolExecutor(max_workers=min(8, len(devs))) as ex:
             results = list(ex.map(self._read_dev, devs))
@@ -2215,7 +2221,7 @@ class Engine:
                 if fails >= 3:
                     need_rescan = True
         self.poll_counter += 1
-        if need_rescan and now - self._last_rescan > 1800:
+        if need_rescan and now - self._last_rescan > 600:          # a sensor is lost → look every 10 min
             self._last_rescan = now
             self.log("Αναζήτηση συσκευών που άλλαξαν IP…")
             self.start_scan(auto=True)
@@ -2514,7 +2520,9 @@ class Engine:
         return {"app": APP_NAME, "version": APP_VERSION, "time": time.time(),
                 "poll_seconds": self.cfg.get("poll_seconds", 60), "devices": devs, "log": ev, "scan": sc,
                 "alarms": self.cfg["alarms"], "email_enabled": bool(self.cfg["email"].get("enabled")),
-                "admin_set": bool((self.cfg.get("admin") or {}).get("hash"))}
+                "admin_set": bool((self.cfg.get("admin") or {}).get("hash")),
+                # addresses of this server → the phone app fills the Tailscale address by itself
+                "urls": [{"label": l, "url": u} for l, u in self.server_urls() if "127.0.0.1" not in u]}
 
     # ── API για την εφαρμογή Android ──
     def events_since(self, since):

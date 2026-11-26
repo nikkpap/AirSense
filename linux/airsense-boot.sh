@@ -114,6 +114,7 @@ if [ -f "$DATA/settings.applied" ] && ! cmp -s "$DATA/settings.applied" "$DATA/s
   TZN=$(get TIMEZONE)
   if [ -n "$TZN" ] && [ -f "/usr/share/zoneinfo/$TZN" ] && [ "$TZN" != "$(timedatectl show -p Timezone --value 2>/dev/null)" ]; then
     timedatectl set-timezone "$TZN" 2>/dev/null || { ln -sf "/usr/share/zoneinfo/$TZN" /etc/localtime; echo "$TZN" > /etc/timezone; }
+    echo "$TZN" > /var/lib/airsense/timezone
     echo "   time zone: $TZN (UTC$(TZ=$TZN date +%:z))"
   fi
   if [ -n "$H" ] && [ "$H" != "$(hostname)" ]; then
@@ -146,6 +147,13 @@ else
   else
     echo "🏠 Local only (no tailscale.sh)"
   fi
+fi
+
+# ── time zone: the Luckfox image can put Asia/Shanghai back → re-apply the one you chose ──
+TZW=$(cat /var/lib/airsense/timezone 2>/dev/null)
+if [ -n "$TZW" ] && [ -f "/usr/share/zoneinfo/$TZW" ] && [ "$(readlink -f /etc/localtime)" != "$(readlink -f "/usr/share/zoneinfo/$TZW")" ]; then
+  timedatectl set-timezone "$TZW" 2>/dev/null || { ln -sf "/usr/share/zoneinfo/$TZW" /etc/localtime; echo "$TZW" > /etc/timezone; }
+  echo "   time zone restored: $TZW"
 fi
 
 # ── factory-default password? → you are asked to change it at the next SSH login ──

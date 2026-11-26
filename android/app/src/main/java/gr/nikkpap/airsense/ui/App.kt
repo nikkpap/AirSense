@@ -245,6 +245,32 @@ fun ConnectionForm(vm: MainViewModel, onConnected: () -> Unit = {}) {
         leadingIcon = { Icon(Icons.Filled.Lock, null) }
     )
     Spacer(Modifier.height(12.dp))
+    // 🔍 one tap: find the server on this WiFi, save, test
+    Button(
+        enabled = !testing, modifier = Modifier.fillMaxWidth(),
+        onClick = {
+            testing = true
+            ok = false
+            result = if (en) "🔍 Looking on your WiFi…" else "🔍 Ψάχνω στο WiFi σου…"
+            scope.launch {
+                val (url, err) = vm.autoFind { d, n ->
+                    if (d % 16 == 0 || d == n) scope.launch { result = (if (en) "🔍 Looking… " else "🔍 Ψάχνω… ") + "$d/$n" }
+                }
+                testing = false
+                if (url != null) { local = url; ts = vm.prefs.tsUrl }
+                ok = url != null && err == null
+                result = when {
+                    url == null -> "❌ $err"
+                    err == null -> (if (en) "✅ Found and connected: " else "✅ Βρέθηκε και συνδέθηκε: ") + url +
+                            (if (vm.prefs.tsUrl.isNotBlank()) (if (en) "\n🌍 Tailscale too: " else "\n🌍 Και Tailscale: ") + vm.prefs.tsUrl else "")
+                    err.contains("PIN", ignoreCase = true) -> (if (en) "🔒 Found $url — type the PIN and tap Test & save" else "🔒 Βρέθηκε $url — γράψε το PIN και πάτα Δοκιμή & αποθήκευση")
+                    else -> "❌ $url: $err"
+                }
+                if (ok) onConnected()
+            }
+        }
+    ) { Icon(Icons.Filled.Search, null); Spacer(Modifier.width(6.dp)); Text(tr("🔍 Βρες αυτόματα (ίδιο WiFi)", "🔍 Find automatically (same WiFi)")) }
+    Spacer(Modifier.height(8.dp))
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedButton(onClick = { scan() }) {
             Icon(Icons.Filled.QrCodeScanner, null); Spacer(Modifier.width(6.dp)); Text(tr("Σκανάρισμα QR", "Scan QR"))
@@ -289,14 +315,14 @@ fun SetupScreen(vm: MainViewModel) {
             Spacer(Modifier.height(6.dp))
             Text(
                 tr(
-                    "1. Στον υπολογιστή άνοιξε το AirSense → καρτέλα «📱 Κινητό».\n" +
-                            "2. Πάτα «Σκανάρισμα QR» εδώ και σκάναρε το QR από την οθόνη.\n" +
-                            "3. Για πρόσβαση από παντού: Tailscale σε υπολογιστή + κινητό (ίδιος λογαριασμός) και σκάναρε και το QR «Tailscale».\n" +
-                            "4. Πάτα «Δοκιμή & αποθήκευση».",
-                    "1. On the PC open AirSense → tab “📱 Mobile”.\n" +
-                            "2. Tap “Scan QR” here and scan the QR on the screen.\n" +
-                            "3. For access from anywhere: Tailscale on PC + phone (same account), scan the “Tailscale” QR too.\n" +
-                            "4. Tap “Test & save”."
+                    "1. Το κινητό στο ίδιο WiFi με την πλακέτα / τον υπολογιστή του AirSense.\n" +
+                            "2. Πάτα «🔍 Βρες αυτόματα» — τα υπόλοιπα (και τη διεύθυνση Tailscale) τα βρίσκει μόνο του.\n" +
+                            "3. Αν ζητήσει PIN, γράψ' το και πάτα «Δοκιμή & αποθήκευση».\n" +
+                            "Εναλλακτικά: «Σκανάρισμα QR» από το PC (καρτέλα «📱 Κινητό») ή από `airsense qr`.",
+                    "1. Phone on the same WiFi as the AirSense board / PC.\n" +
+                            "2. Tap “🔍 Find automatically” — it finds the rest by itself (the Tailscale address too).\n" +
+                            "3. If it asks for a PIN, type it and tap “Test & save”.\n" +
+                            "Or: “Scan QR” from the PC (tab “📱 Mobile”) or from `airsense qr`."
                 ), lineHeight = 22.sp
             )
         }

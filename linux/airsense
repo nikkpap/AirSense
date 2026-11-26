@@ -58,7 +58,10 @@ case "${1:-status}" in
     if timeout 5 bash -c 'exec 3<>/dev/tcp/1.1.1.1/443' 2>/dev/null; then
       getent hosts github.com >/dev/null 2>&1 && okk "internet" "OK (DNS OK)" || bad "internet" "online but DNS fails"
     else bad "internet" "no internet"; fi
-    NTPS=$(cat $DATA/ntp.txt 2>/dev/null); TZN=$(timedatectl show -p Timezone --value 2>/dev/null)
+    NTPS=$(cat $DATA/ntp.txt 2>/dev/null); TZN=$(readlink -f /etc/localtime | sed 's#.*/zoneinfo/##')
+    TZW=$(cat $DATA/timezone 2>/dev/null)
+    if [ -n "$TZW" ] && [ "$TZN" != "$TZW" ]; then wrn "time zone" "$TZN (chosen: $TZW) → airsense clock $TZW"
+    elif [ -z "$TZW" ] && [ "$TZN" = "Asia/Shanghai" ]; then wrn "time zone" "Asia/Shanghai (factory) → airsense clock Europe/Athens"; fi
     if [ "$(timedatectl show -p NTPSynchronized --value 2>/dev/null)" = yes ]; then okk "clock" "$(date '+%F %T') $TZN UTC$(date +%:z) (synced${NTPS:+ · $NTPS})"
     else wrn "clock" "$(date '+%F %T') $TZN UTC$(date +%:z) (NOT synced yet${NTPS:+ · $NTPS}) → airsense clock"; fi
 
@@ -131,6 +134,7 @@ case "${1:-status}" in
               [ -f "/usr/share/zoneinfo/$2" ] || { echo "✖ unknown time zone: $2 (list: timedatectl list-timezones)"; exit 1; }
               # timedatectl is blocked on some images (Luckfox: "Access denied") → write it directly
               sudo timedatectl set-timezone "$2" 2>/dev/null || { sudo ln -sf "/usr/share/zoneinfo/$2" /etc/localtime && echo "$2" | sudo tee /etc/timezone >/dev/null; }
+              echo "$2" | sudo tee /var/lib/airsense/timezone >/dev/null     # kept: re-applied on every boot
               [ "$(readlink -f /etc/localtime)" = "$(readlink -f "/usr/share/zoneinfo/$2")" ] && echo "✔ Time zone $2 (UTC$(TZ=$2 date +%:z))" || echo "✖ time zone not set"
             fi
             sudo systemctl restart systemd-timesyncd 2>/dev/null

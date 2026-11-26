@@ -14,7 +14,7 @@ Double-click: installs what it needs (PyQt6, paramiko, qrcode) by itself.
 Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM
 """
 APP_NAME = "AirSense Remote"
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.2.0"
 
 import os
 import sys
@@ -94,7 +94,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QLabel, QPushBu
 CFG_DIR = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~/.config"), APP_NAME)
 CFG_PATH = os.path.join(CFG_DIR, "config.json")
 DEFAULT_CFG = {
-    "lan": "192.168.1.29", "mdns": "airsense.local", "tailscale": "100.104.13.118",
+    "lan": "", "mdns": "airsense.local", "tailscale": "",
     "route": "auto", "user": "pico", "password": "", "port": 22, "web_port": 8765, "pin": "",
     "auto_connect": True, "save_password": True, "geometry": "", "auto_find": True,
 }
@@ -287,6 +287,44 @@ def blebox_sensor(ip, timeout=2.0):
     return None
 
 
+def find_boards(progress=None):
+    """Boards on this PC's networks: AirSense web :8765 (installed) or SSH :22 named airsense / luckfox / raspberry."""
+    hosts = [str(h) for n in pc_networks() for h in n.hosts()]
+    out = []
+
+    def probe(ip):
+        web = tcp_ok(ip, 8765, 0.6)
+        ssh = tcp_ok(ip, 22, 0.6)
+        if not (web or ssh):
+            return None
+        name = ""
+        try:
+            name = socket.gethostbyaddr(ip)[0]
+        except Exception:
+            pass
+        is_as = False
+        if web:
+            try:
+                urllib.request.urlopen(f"http://{ip}:8765/api/status", timeout=2)
+                is_as = True
+            except urllib.error.HTTPError as e:
+                is_as = e.code in (401, 403)
+            except Exception:
+                pass
+        hint = re.search(r"airsense|luckfox|raspberry|pico|rpi", name, re.I)
+        if is_as or (ssh and hint):
+            return {"ip": ip, "name": name, "airsense": is_as, "ssh": ssh}
+        return None
+    with ThreadPoolExecutor(max_workers=64) as ex:
+        for r in ex.map(probe, hosts):
+            if r:
+                out.append(r)
+    return sorted(out, key=lambda r: (not r["airsense"], r["ip"]))
+
+
+GET_SH = "wget -qO get.sh https://raw.githubusercontent.com/nikkpap/AirSense/main/get.sh && sudo bash get.sh"
+
+
 # ═════════════════════════ SSH ═════════════════════════
 class SSHConn:
     """paramiko Transport with auth: none (Tailscale SSH) → password → keyboard-interactive → keys."""
@@ -399,6 +437,7 @@ class Bus(QObject):
     status = pyqtSignal(str)
     sensors = pyqtSignal(object)
     find_done = pyqtSignal(str, str)     # result: found / added / none / error, message
+    learned = pyqtSignal(str, str)       # board LAN IP, Tailscale IP
 
 
 # ═════════════════════════ UI pieces ═════════════════════════
@@ -539,7 +578,13 @@ class SettingsDialog(QDialog):
         self.save_pw.setChecked(cfg.get("save_password", True))
         self.auto = QCheckBox("Connect automatically when the program opens")
         self.auto.setChecked(cfg.get("auto_connect", True))
-        f.addRow("🏠 Local IP (LAN)", self.lan)
+        lan_row = QHBoxLayout()
+        lan_row.addWidget(self.lan, 1)
+        self.btn_findb = QPushButton("🔍 Find board")
+        self.btn_findb.setToolTip("Look for the board on this PC's network")
+        self.btn_findb.clicked.connect(self.find_board)
+        lan_row.addWidget(self.btn_findb)
+        f.addRow("🏠 Local IP (LAN)", lan_row)
         f.addRow("🔤 Name (mDNS)", self.mdns)
         f.addRow("🌍 Tailscale IP", self.ts)
         f.addRow("👤 User", self.user)
@@ -554,6 +599,28 @@ class SettingsDialog(QDialog):
         bb.accepted.connect(self.ok)
         bb.rejected.connect(self.reject)
         lay.addWidget(bb)
+
+    def find_board(self):
+        self.btn_findb.setEnabled(False)
+        self.btn_findb.setText("searching…")
+        QApplication.processEvents()
+        res = {}
+        t = threading.Thread(target=lambda: res.update(r=find_boards()), daemon=True)
+        t.start()
+        while t.is_alive():
+            QApplication.processEvents()
+            time.sleep(0.05)
+        boards = res.get("r") or []
+        self.btn_findb.setEnabled(True)
+        self.btn_findb.setText("🔍 Find board")
+        if not boards:
+            QMessageBox.information(self, APP_NAME, "No board found on this network.\n\n• Is the board on power and on the router (cable)?\n"
+                                    "• Wait 1–2 minutes after power-on and try again.\n• Or type its IP (router page / Fing app).")
+            return
+        items = [f"{b['ip']}  ·  {b['name'] or '?'}  ·  {'AirSense ✔' if b['airsense'] else 'SSH only (AirSense not installed yet)'}" for b in boards]
+        it, ok = QInputDialog.getItem(self, "🔍 Boards found", "Choose your board:", items, 0, False)
+        if ok:
+            self.lan.setText(boards[items.index(it)]["ip"])
 
     def ok(self):
         c = self.cfg
@@ -586,6 +653,7 @@ COMMANDS = [
     ("Sensors", "📟 Set PIN", "airsense set-pin {pin}", "ask:New PIN for the web page (empty = no PIN)", "PIN of the web page"),
     ("Sensors", "🌤 City", "airsense city {city}", "ask:City / village for the weather", "Weather location"),
     ("Sensors", "🕒 Time zone", "airsense clock {tz}", "ask:Time zone (e.g. Europe/Athens)", "Change the time zone"),
+    ("System", "⬇ Install on board", GET_SH, "install", "Install / repair AirSense on the board (new board: first time) — answer the questions below"),
     ("System", "💽 Disk / RAM", "df -h / && free -m", "run", "Free space and memory"),
     ("System", "🌡 CPU temp", "cat /sys/class/thermal/thermal_zone0/temp | awk '{printf \"%.1f °C\\n\", $1/1000}'", "run", "CPU temperature"),
     ("System", "🔑 Password", "airsense password", "run", "Change the login password (interactive — answer below)"),
@@ -616,6 +684,7 @@ class Main(QMainWindow):
         self.bus.status.connect(self._on_status)
         self.bus.sensors.connect(self._on_sensors)
         self.bus.find_done.connect(self._find_done)
+        self.bus.learned.connect(self._on_learned)
         self._finding = False
         self._sensor_bad = 0
         self._last_autofind = 0.0
@@ -626,7 +695,9 @@ class Main(QMainWindow):
         self.status_timer.timeout.connect(lambda: self.refresh_status(quiet=True))
         self.status_timer.start(180000)
         QTimer.singleShot(300, self.refresh_leds)
-        if self.cfg.get("auto_connect") and (self.cfg.get("_pw") or True):
+        if not os.path.exists(CFG_PATH):
+            QTimer.singleShot(500, self.first_run)          # first time: guided setup
+        elif self.cfg.get("auto_connect"):
             QTimer.singleShot(600, self.connect_ssh)
 
     # ── layout ──
@@ -935,6 +1006,7 @@ class Main(QMainWindow):
             self.conn_lbl.setText(f"✔ {self.cfg['user']}@{host} ({via})")
             self.led["ssh"].set("ok", f"connected to {host}")
             self._term_sys(f"✔ Connected to {self.cfg['user']}@{host} via {via}")
+            self._learn_addresses()
             self.refresh_status(quiet=True)
             self.refresh_leds()
         else:
@@ -945,12 +1017,57 @@ class Main(QMainWindow):
             if "password" in msg.lower() or "authentication" in msg.lower():
                 QMessageBox.warning(self, APP_NAME, "Wrong user or password.\n\n⚙ Settings → User / Password.")
 
+    def _learn_addresses(self):
+        """Ask the board for its current LAN IP and Tailscale IP → keep ⚙ Settings and the QR codes up to date by themselves."""
+        conn = self.conn
+
+        def job():
+            try:
+                _, out = conn.run("hostname -I 2>/dev/null; echo '##'; tailscale ip -4 2>/dev/null", timeout=20)
+            except Exception:
+                return
+            lan_part, _, ts_part = strip_ansi(out).partition("##")
+            ips = re.findall(r"\b(\d{1,3}(?:\.\d{1,3}){3})\b", lan_part)
+            lan = next((i for i in ips if not i.startswith(("100.", "127.", "172.32."))), "")
+            ts = next(iter(re.findall(r"\b(100\.\d{1,3}\.\d{1,3}\.\d{1,3})\b", ts_part)), "")
+            self.bus.learned.emit(lan, ts)
+        threading.Thread(target=job, daemon=True).start()
+
+    def _on_learned(self, lan, ts):
+        changed = []
+        if lan and lan != self.cfg.get("lan"):
+            changed.append(f"local IP {self.cfg.get('lan') or '—'} → {lan}")
+            self.cfg["lan"] = lan
+        if ts and ts != self.cfg.get("tailscale"):
+            changed.append(f"Tailscale {self.cfg.get('tailscale') or '—'} → {ts}")
+            self.cfg["tailscale"] = ts
+        if changed:
+            save_cfg(self.cfg)
+            self._update_qr()
+            self._term_sys("ℹ Settings updated by themselves: " + " · ".join(changed))
+
     def _set_connected_ui(self, on):
         self.btn_conn.setText("⏏ Disconnect" if on else "🔌 Connect")
         for b in self.cmd_buttons:
             b.setEnabled(on)
         if hasattr(self, "btn_find"):
             self.btn_find.setEnabled(on and not getattr(self, "_finding", False))
+
+    def first_run(self):
+        QMessageBox.information(self, f"👋 {APP_NAME}",
+            "<b>Welcome!</b> Three steps:<br><br>"
+            "<b>1.</b> The next window looks for your board by itself (🔍 Find board) — pick it from the list.<br>"
+            "<b>2.</b> Type the board's <b>user</b> and <b>password</b><br>"
+            "&nbsp;&nbsp;&nbsp;&nbsp;Luckfox: <code>pico</code> / <code>luckfox</code> · Raspberry Pi: the ones you set in Raspberry Pi Imager.<br>"
+            "<b>3.</b> Save → it connects. New board? Press <b>⬇ Install on board</b> (System row).<br><br>"
+            "Everything else (Tailscale address, new IPs) it learns from the board by itself.")
+        d = SettingsDialog(self, self.cfg)
+        QTimer.singleShot(300, d.find_board)
+        if d.exec():
+            self._update_qr()
+            self.connect_ssh()
+        else:
+            save_cfg(self.cfg)
 
     def open_settings(self):
         d = SettingsDialog(self, self.cfg)
@@ -1218,6 +1335,15 @@ class Main(QMainWindow):
         if kind == "find":
             self.find_sensor(quiet=False)
             return
+        if kind == "install":
+            if QMessageBox.question(self, "⬇ Install on board",
+                    "Installs (or repairs / updates) AirSense on the board — 5–20 minutes.\n\n"
+                    "• The board needs internet (cable to the router).\n"
+                    "• Questions appear in yellow under the terminal: type the answer in the box and press Send\n"
+                    "  (Enter alone = the suggested answer).\n"
+                    "• At the end it asks to reboot → the connection drops; press Connect again in 1–2 minutes.\n\nStart?"
+                    ) != QMessageBox.StandardButton.Yes:
+                return
         if kind == "confirm":
             if QMessageBox.question(self, APP_NAME, f"{label}\n\n$ {cmd}\n\nAre you sure?") != QMessageBox.StandardButton.Yes:
                 return
