@@ -14,7 +14,7 @@ Double-click: installs what it needs (PyQt6, paramiko, qrcode) by itself.
 Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM
 """
 APP_NAME = "AirSense Remote"
-APP_VERSION = "1.5.1"
+APP_VERSION = "1.5.2"
 
 import os
 import sys
@@ -461,6 +461,9 @@ QPushButton:disabled { color: #59627a; background: #171d27; }
 QPushButton#pri { background: #2b6cff; border-color: #2b6cff; font-weight: 700; }
 QPushButton#pri:hover { background: #3f7bff; }
 QPushButton#danger { border-color: #6b2b33; }
+QPushButton#burger { font-size: 17pt; padding: 0; border-radius: 10px; }
+QPushButton#burger[todo="true"] { border: 2px solid #2b6cff; color: #6ea0ff; }
+QPushButton#burger:checked { background: #2b6cff; border-color: #2b6cff; color: #fff; }
 QPushButton#danger:hover { background: #4a1f26; }
 QLineEdit, QComboBox, QSpinBox { background: #0f141c; border: 1px solid #2c3850; border-radius: 8px; padding: 6px 8px; }
 QLineEdit:focus, QComboBox:focus { border-color: #2b6cff; }
@@ -664,15 +667,13 @@ class Drawer(QWidget):
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 10, 8, 10)
         hd = QHBoxLayout()
-        t = QLabel("☰  Menu")
+        t = QLabel("🚀  Easy setup")
         t.setObjectName("h2")
         hd.addWidget(t)
         hd.addStretch()
-        x = QPushButton("✕")
-        x.setFixedWidth(40)
-        x.setToolTip("Close (Esc)")
-        x.clicked.connect(self.close_drawer)
-        hd.addWidget(x)
+        hint = QLabel("☰ / Esc = hide")
+        hint.setObjectName("muted")
+        hd.addWidget(hint)
         v.addLayout(hd)
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
@@ -690,11 +691,16 @@ class Drawer(QWidget):
 
     def place(self):
         h = self.host
+        y = 0
+        if getattr(self, "below", None) is not None:          # start under the top bar → the ☰ button stays visible
+            y = self.below.geometry().bottom() + 6
         w = min(470, max(320, int(h.width() * 0.92)))
-        self.setGeometry(0, 0, min(w, h.width()), h.height())
-        self.scrim.setGeometry(0, 0, h.width(), h.height())
+        self.setGeometry(0, y, min(w, h.width()), h.height() - y)
+        self.scrim.setGeometry(0, y, h.width(), h.height() - y)
 
     def open_drawer(self):
+        if getattr(self, "button", None) is not None:
+            self.button.setChecked(True)
         self.place()
         QTimer.singleShot(30, lambda: hasattr(self.host.window(), "_update_ez") and self.host.window()._update_ez())
         self.scrim.show()
@@ -705,6 +711,8 @@ class Drawer(QWidget):
     def close_drawer(self):
         self.hide()
         self.scrim.hide()
+        if getattr(self, "button", None) is not None:
+            self.button.setChecked(False)
 
     def toggle(self):
         self.close_drawer() if self.isVisible() else self.open_drawer()
@@ -925,9 +933,10 @@ class Main(QMainWindow):
         tl0.addLayout(self.top_h)
         row = FlowLayout(spacing=8)
         self.btn_menu = QPushButton("☰")
-        self.btn_menu.setObjectName("pri")
-        self.btn_menu.setToolTip("Menu: 🚀 Easy setup (Ctrl+M)")
-        self.btn_menu.setMinimumHeight(38)
+        self.btn_menu.setObjectName("burger")
+        self.btn_menu.setCheckable(True)
+        self.btn_menu.setFixedSize(44, 40)
+        self.btn_menu.setToolTip("Show / hide 🚀 Easy setup (Ctrl+M)")
         self.btn_menu.clicked.connect(lambda: self.drawer.toggle())
         row.addWidget(self.btn_menu)
         t = QLabel("🌬 AirSense Remote")
@@ -974,6 +983,8 @@ class Main(QMainWindow):
         left.setMinimumWidth(330)
         self.left_tabs = left
         self.drawer = Drawer(root)
+        self.drawer.below = top
+        self.drawer.button = self.btn_menu
         ec, ecl = card()
         self.ez_title = QLabel("🚀 <b>Easy setup</b>")
         self.ez_title.setStyleSheet("font-size:13pt")
@@ -987,6 +998,7 @@ class Main(QMainWindow):
         self.ez_next = QPushButton("")
         self.ez_next.setObjectName("pri")
         self.ez_next.setMinimumHeight(46)
+        self.ez_next.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)   # long text never widens the menu
         self.ez_next.setStyleSheet("font-size:11.5pt;text-align:left;padding-left:14px")
         self.ez_next.clicked.connect(lambda: self._ez_next_fn and (self.drawer.close_drawer(), self._ez_next_fn()))
         self._ez_next_fn = None
@@ -1609,15 +1621,15 @@ class Main(QMainWindow):
         if nxt:
             num, title, bt, fn = nxt
             self.ez_title.setText(f"🚀 <b>Easy setup</b> <span style='color:#7d8799'>— step {num} of {len(self.EZ)}</span>")
-            self.ez_next.setText(f"▶  Next: {title} — {bt}")
+            self.ez_next.setText(f"▶  Next: {title}")
             self._ez_next_fn = fn
             self.ez_next.setVisible(True)
         else:
             self.ez_title.setText("✅ <b>All ready</b> <span style='color:#7d8799'>— board, AirSense, sensor, phone, from anywhere</span>")
             self.ez_next.setVisible(False)
             self._ez_next_fn = None
-        self.btn_menu.setText(f"☰  Setup {done}/{len(self.EZ)}" if nxt else "☰")
-        self.btn_menu.setObjectName("pri" if nxt else "")
+        self.btn_menu.setProperty("todo", bool(nxt))         # blue dot while a step is missing
+        self.btn_menu.setToolTip(f"Show / hide 🚀 Easy setup — {done}/{len(self.EZ)} done (Ctrl+M)")
         self.btn_menu.style().unpolish(self.btn_menu)
         self.btn_menu.style().polish(self.btn_menu)
         if not getattr(self, "_ez_tab_chosen", False) and self.led_time.text():
