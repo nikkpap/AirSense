@@ -15,7 +15,7 @@ Developer : Nikolaos K. Paridis (aka nikkpap) — ALU DEV TEAM
 APP_NAME = "AirSense"
 OLD_APP_NAMES = ("ALU HygroLink", "ALU AirSense")   # παλιά ονόματα (μεταφορά δεδομένων/ρυθμίσεων)
 OLD_APP_NAME = OLD_APP_NAMES[0]
-APP_VERSION = "1.7.2"
+APP_VERSION = "1.7.3"
 AUTHOR = "Nikolaos K. Paridis (aka nikkpap)"
 TEAM = "ALU DEV TEAM"
 
@@ -6759,6 +6759,8 @@ if not HEADLESS:
                                          "Δοκιμάστε ξανά: πατήστε άλλη καρτέλα και ξανά 🛰 Πλακέτα.")
                     return
                 try:
+                    mod.QLabel = QLabel          # same colours as AirSense: rich-text labels follow the light / dark theme
+                    mod.tcol = tcol
                     rm = mod.Main()
                     rm.setWindowFlags(Qt.WindowType.Widget)
                     rm.setMinimumSize(0, 0)
@@ -7617,7 +7619,7 @@ Double-click: installs what it needs (PyQt6, paramiko, qrcode) by itself.
 Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM
 """
 APP_NAME = "AirSense Remote"
-APP_VERSION = "1.6.0"
+APP_VERSION = "1.6.1"
 
 import os
 import sys
@@ -7782,8 +7784,8 @@ def http_json(url, pin="", timeout=5):
 
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b[()][A-Z0-9]|\x1b[=>]")
-ANSI_COLORS = {30: "#5b6678", 31: "#ff5c5c", 32: "#2ecc71", 33: "#f5b942", 34: "#5b8cff", 35: "#c678dd",
-               36: "#4dd0e1", 37: "#e6e9ef", 90: "#7d8799", 91: "#ff7b7b", 92: "#57e389", 93: "#ffd866",
+ANSI_COLORS = {30: "#5b6475", 31: "#ff5c5c", 32: "#2ecc71", 33: "#ffc04d", 34: "#5b8cff", 35: "#c678dd",
+               36: "#4dd0e1", 37: "#e6ebf5", 90: "#8b96ab", 91: "#ff7b7b", 92: "#57e389", 93: "#ffc04d",
                94: "#7aa2ff", 95: "#d7a1ff", 96: "#7ee8f2", 97: "#ffffff"}
 
 
@@ -7826,7 +7828,7 @@ def ansi_to_html(line):
         if fg:
             st.append(f"color:{fg}")
         elif d:
-            st.append("color:#7d8799")
+            st.append("color:#8b96ab")
         if b:
             st.append("font-weight:700")
         html.append(f"<span style='{';'.join(st)}'>{txt}</span>" if st else txt)
@@ -8048,50 +8050,50 @@ class Bus(QObject):
 # ═════════════════════════ UI pieces ═════════════════════════
 QSS = """
 QWidget { background: transparent; }
-* { font-family: 'Segoe UI', 'Noto Sans', sans-serif; font-size: 10.5pt; color: #e6e9ef; }
-QStatusBar { background: #0f141c; color: #7d8799; }
-QCheckBox::indicator { background: #0f141c; border: 1px solid #3d5280; border-radius: 4px; }
+* { font-family: 'Segoe UI', 'Noto Sans', sans-serif; font-size: 10.5pt; color: #e6ebf5; }
+QStatusBar { background: #11151c; color: #8b96ab; }
+QCheckBox::indicator { background: #11151c; border: 1px solid #2b4a8a; border-radius: 4px; }
 QCheckBox::indicator:checked { background: #2b6cff; border-color: #2b6cff; image: none; }
-QScrollBar:vertical { background: #0f141c; width: 10px; margin: 0; border: none; }
-QScrollBar::handle:vertical { background: #2c3850; border-radius: 5px; min-height: 30px; }
-QScrollBar:horizontal { background: #0f141c; height: 10px; margin: 0; border: none; }
-QScrollBar::handle:horizontal { background: #2c3850; border-radius: 5px; min-width: 30px; }
+QScrollBar:vertical { background: #11151c; width: 10px; margin: 0; border: none; }
+QScrollBar::handle:vertical { background: #2f3747; border-radius: 5px; min-height: 30px; }
+QScrollBar:horizontal { background: #11151c; height: 10px; margin: 0; border: none; }
+QScrollBar::handle:horizontal { background: #2f3747; border-radius: 5px; min-width: 30px; }
 QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; }
-QToolTip { background: #161d29; color: #e6e9ef; border: 1px solid #2c3850; }
+QToolTip { background: #171c26; color: #e6ebf5; border: 1px solid #2f3747; }
 QSplitter::handle { background: transparent; }
-QMainWindow, QWidget#root { background: #0f141c; }
-QDialog, QMessageBox, QInputDialog { background: #0f141c; }
-QGroupBox { border: 1px solid #222c3b; border-radius: 12px; margin-top: 14px; padding: 10px 8px 8px; }
-QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 4px; color: #9fb1d0; font-weight: 700; }
+QMainWindow, QWidget#root { background: #11151c; }
+QDialog, QMessageBox, QInputDialog { background: #11151c; }
+QGroupBox { border: 1px solid #262d3b; border-radius: 12px; margin-top: 14px; padding: 10px 8px 8px; }
+QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 4px; color: #c8d0e0; font-weight: 700; }
 QCheckBox::indicator { width: 18px; height: 18px; }
-QFrame#card { background: #161d29; border: 1px solid #222c3b; border-radius: 14px; }
+QFrame#card { background: #171c26; border: 1px solid #262d3b; border-radius: 14px; }
 QLabel#h1 { font-size: 17pt; font-weight: 700; }
-QLabel#h2 { font-size: 11pt; font-weight: 700; color: #9fb1d0; }
-QLabel#muted { color: #7d8799; }
-QPushButton { background: #1f2836; border: 1px solid #2c3850; border-radius: 9px; padding: 7px 12px; }
-QPushButton:hover { background: #26324a; border-color: #3d5280; }
+QLabel#h2 { font-size: 11pt; font-weight: 700; color: #c8d0e0; }
+QLabel#muted { color: #8b96ab; }
+QPushButton { background: #1e2533; border: 1px solid #2f3747; border-radius: 9px; padding: 7px 12px; }
+QPushButton:hover { background: #273042; border-color: #2b4a8a; }
 QPushButton:pressed { background: #2b6cff; }
-QPushButton:disabled { color: #59627a; background: #171d27; }
-QPushButton#pri { background: #2b6cff; border-color: #2b6cff; font-weight: 700; }
+QPushButton:disabled { color: #6b7588; background: #1b2130; }
+QPushButton#pri { background: #2b6cff; border-color: #2b6cff; font-weight: 700; color: #ffffff; }
 QPushButton#pri:hover { background: #3f7bff; }
-QPushButton#danger { border-color: #6b2b33; }
+QPushButton#danger { border-color: #7a2c31; }
 QPushButton#burger { font-size: 17pt; padding: 0; border-radius: 10px; }
-QPushButton#burger[todo="true"] { border: 2px solid #2b6cff; color: #6ea0ff; }
+QPushButton#burger[todo="true"] { border: 2px solid #2b6cff; color: #5aa9ff; }
 QPushButton#burger:checked { background: #2b6cff; border-color: #2b6cff; color: #fff; }
-QPushButton#danger:hover { background: #4a1f26; }
-QLineEdit, QComboBox, QSpinBox { background: #0f141c; border: 1px solid #2c3850; border-radius: 8px; padding: 6px 8px; }
+QPushButton#danger:hover { background: #3a1d22; }
+QLineEdit, QComboBox, QSpinBox { background: #11151c; border: 1px solid #2f3747; border-radius: 8px; padding: 6px 8px; }
 QLineEdit:focus, QComboBox:focus { border-color: #2b6cff; }
-QComboBox QAbstractItemView { background: #161d29; selection-background-color: #2b6cff; }
-QTextEdit#term { background: #0a0e14; border: 1px solid #222c3b; border-radius: 10px; padding: 6px;
+QComboBox QAbstractItemView { background: #171c26; selection-background-color: #2b6cff; }
+QTextEdit#term { background: #0a0e14; color: #d7dde8; border: 1px solid #262d3b; border-radius: 10px; padding: 6px;
                  font-family: 'Cascadia Mono', 'Consolas', 'DejaVu Sans Mono', monospace; font-size: 10pt; }
-QTreeWidget { background: #0f141c; border: 1px solid #222c3b; border-radius: 10px; }
+QTreeWidget { background: #11151c; border: 1px solid #262d3b; border-radius: 10px; }
 QTreeWidget::item { padding: 3px; }
-QHeaderView::section { background: #161d29; border: none; padding: 5px; color: #9fb1d0; }
+QHeaderView::section { background: #171c26; border: none; padding: 5px; color: #c8d0e0; }
 QTabWidget::pane { border: none; }
-QTabBar::tab { background: #161d29; padding: 7px 14px; border-top-left-radius: 9px; border-top-right-radius: 9px; margin-right: 3px; }
+QTabBar::tab { background: #171c26; padding: 7px 14px; border-top-left-radius: 9px; border-top-right-radius: 9px; margin-right: 3px; }
 QTabBar::tab:selected { background: #2b6cff; }
-QGroupBox { border: 1px solid #222c3b; border-radius: 10px; margin-top: 12px; padding-top: 8px; }
-QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; color: #9fb1d0; font-weight: 700; }
+QGroupBox { border: 1px solid #262d3b; border-radius: 10px; margin-top: 12px; padding-top: 8px; }
+QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; color: #c8d0e0; font-weight: 700; }
 QScrollArea { border: none; background: transparent; }
 QCheckBox::indicator { width: 18px; height: 18px; }
 """
@@ -8099,7 +8101,7 @@ QCheckBox::indicator { width: 18px; height: 18px; }
 
 class Led(QWidget):
     """● colored dot + label + tooltip."""
-    COL = {"ok": "#2ecc71", "bad": "#ff5c5c", "warn": "#f5b942", "off": "#3b4558"}
+    COL = {"ok": "#2ecc71", "bad": "#ff5c5c", "warn": "#ffc04d", "off": "#2f3747"}
 
     def __init__(self, text):
         super().__init__()
@@ -8117,7 +8119,7 @@ class Led(QWidget):
     def set(self, state, tip=""):
         self.state = state
         c = self.COL.get(state, self.COL["off"])
-        glow = f"border: 2px solid {c}55;" if state != "off" else "border: 2px solid #222c3b;"
+        glow = f"border: 2px solid {c}55;" if state != "off" else "border: 2px solid #262d3b;"
         self.dot.setStyleSheet(f"background:{c}; border-radius:8px; {glow}")
         self.setToolTip(tip)
 
@@ -8277,7 +8279,7 @@ class Drawer(QWidget):
         self.scrim.hide()
         self.setObjectName("drawer")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setStyleSheet("QWidget#drawer{background:#121924;border-right:1px solid #2c3850}")
+        self.setStyleSheet("QWidget#drawer{background:#141821;border-right:1px solid #2f3747}")
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 10, 8, 10)
         hd = QHBoxLayout()
@@ -8330,6 +8332,11 @@ class Drawer(QWidget):
 
     def toggle(self):
         self.close_drawer() if self.isVisible() else self.open_drawer()
+
+
+def tcol(hexcol):
+    """Colour for tree items — replaced by AirSense's theme-aware version when it runs inside AirSense."""
+    return QColor(hexcol)
 
 
 def card(title=None):
@@ -8606,7 +8613,7 @@ class Main(QMainWindow):
         self.ez_bar = QFrame()
         self.ez_bar.setFixedHeight(8)
         self.ez_bar_fill = QFrame(self.ez_bar)
-        self.ez_bar.setStyleSheet("background:#222c3b;border-radius:4px")
+        self.ez_bar.setStyleSheet("background:#262d3b;border-radius:4px")
         self.ez_bar_fill.setStyleSheet("background:#2b6cff;border-radius:4px")
         ecl.addWidget(self.ez_bar)
         self.ez_next = QPushButton("")
@@ -8633,7 +8640,7 @@ class Main(QMainWindow):
         for k, num, title, desc, bt, fn in self.EZ:
             sf = QFrame()
             sf.setObjectName("step")
-            sf.setStyleSheet("QFrame#step{background:#0f141c;border:1px solid #222c3b;border-radius:11px}")
+            sf.setStyleSheet("QFrame#step{background:#11151c;border:1px solid #262d3b;border-radius:11px}")
             row = QHBoxLayout(sf)
             row.setContentsMargins(10, 8, 10, 8)
             row.setSpacing(10)
@@ -8642,7 +8649,7 @@ class Main(QMainWindow):
             badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
             col = QVBoxLayout()
             col.setSpacing(6)
-            lb = QLabel(f"<b>{title}</b><br><span style='color:#7d8799'>{desc}</span>")
+            lb = QLabel(f"<b>{title}</b><br><span style='color:#8b96ab'>{desc}</span>")
             lb.setWordWrap(True)
             b = QPushButton(bt)
             b.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
@@ -8653,7 +8660,7 @@ class Main(QMainWindow):
             row.addLayout(col, 1)
             ecl.addWidget(sf)
             self.ez_rows[k] = (badge, b)
-        tip = QLabel("<span style='color:#7d8799'>Moved / new WiFi? Only step 3 again — the rest finds the new addresses by itself.</span>")
+        tip = QLabel("<span style='color:#8b96ab'>Moved / new WiFi? Only step 3 again — the rest finds the new addresses by itself.</span>")
         tip.setWordWrap(True)
         ecl.addWidget(tip)
         self.drawer.bl.addWidget(ec)
@@ -8664,7 +8671,7 @@ class Main(QMainWindow):
         ol.setContentsMargins(0, 6, 0, 0)
         sc = QFrame()                                   # 🌡 live sensors → top-right corner of the window
         sc.setObjectName("sensp")
-        sc.setStyleSheet("QFrame#sensp{background:#0f141c;border:1px solid #222c3b;border-radius:12px}")
+        sc.setStyleSheet("QFrame#sensp{background:#11151c;border:1px solid #262d3b;border-radius:12px}")
         sc.setMinimumWidth(340)
         sc.setMaximumWidth(520)
         sc.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
@@ -8815,7 +8822,7 @@ class Main(QMainWindow):
         tcl.addWidget(self.term, 1)
         self.live_lbl = QLabel("")
         self.live_lbl.setFont(mono)
-        self.live_lbl.setStyleSheet("color:#ffd866")
+        self.live_lbl.setStyleSheet("color:#ffc04d")
         self.live_lbl.setWordWrap(True)
         tcl.addWidget(self.live_lbl)
         ir = QHBoxLayout()
@@ -9102,13 +9109,13 @@ class Main(QMainWindow):
             dot = QLabel("●")
             dot.setStyleSheet(f"color:{'#2ecc71' if d.get('online') else '#ff5c5c'}; font-size:16pt")
             h.addWidget(dot)
-            nm = QLabel(f"<b>{d.get('name') or d.get('id')}</b><br><span style='color:#7d8799'>{d.get('ip')} · {d.get('type') or ''}</span>")
+            nm = QLabel(f"<b>{d.get('name') or d.get('id')}</b><br><span style='color:#8b96ab'>{d.get('ip')} · {d.get('type') or ''}</span>")
             nm.setMinimumWidth(60)
             nm.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
             h.addWidget(nm, 1)
             t, hu = d.get("t"), d.get("h")
             val = QLabel(f"<span style='color:#ff9f43;font-size:17pt;font-weight:700'>{'—' if t is None else f'{t:.1f}°C'}</span>"
-                         f"&nbsp;&nbsp;<span style='color:#4da3ff;font-size:17pt;font-weight:700'>{'—' if hu is None else f'{hu:.1f}%'}</span>")
+                         f"&nbsp;&nbsp;<span style='color:#3fa7ff;font-size:17pt;font-weight:700'>{'—' if hu is None else f'{hu:.1f}%'}</span>")
             h.addWidget(val)
             fr.setToolTip(f"dew point {d.get('dp')} °C · absolute {d.get('ah')} g/m³\n{d.get('error') or ''}")
             self.sens_box.addWidget(fr)
@@ -9133,7 +9140,7 @@ class Main(QMainWindow):
     def _on_status(self, out):
         self.tree.clear()
         sec_item, bad, warn = None, 0, 0
-        icon_col = {"✔": "#2ecc71", "⚠": "#f5b942", "✖": "#ff5c5c"}
+        icon_col = {"✔": "#2ecc71", "⚠": "#ffc04d", "✖": "#ff5c5c"}
         for raw in out.splitlines():
             line = strip_ansi(last_cr(raw)).rstrip()
             if not line.strip() or "password for" in line:
@@ -9144,7 +9151,7 @@ class Main(QMainWindow):
                 f = sec_item.font(1)
                 f.setBold(True)
                 sec_item.setFont(1, f)
-                sec_item.setForeground(1, QColor("#9fb1d0"))
+                sec_item.setForeground(1, tcol("#c8d0e0"))
                 self.tree.addTopLevelItem(sec_item)
                 sec_item.setExpanded(True)
                 continue
@@ -9154,7 +9161,7 @@ class Main(QMainWindow):
             if m:
                 ic, key, val = m.groups()
                 it = QTreeWidgetItem([ic, key.strip(), val.strip()])
-                it.setForeground(0, QColor(icon_col[ic]))
+                it.setForeground(0, tcol(icon_col[ic]))
                 it.setToolTip(2, val.strip())
                 bad += ic == "✖"
                 warn += ic == "⚠"
@@ -9163,7 +9170,7 @@ class Main(QMainWindow):
                 if txt.startswith("🌬"):
                     self.setWindowTitle(f"🌬 {APP_NAME} v{APP_VERSION} — {txt[1:].strip()}")
                 it = QTreeWidgetItem(["", "", txt])
-                it.setForeground(2, QColor("#aab4c6"))
+                it.setForeground(2, tcol("#c8d0e0"))
             if sec_item:
                 sec_item.addChild(it)
             else:
@@ -9172,7 +9179,7 @@ class Main(QMainWindow):
             self.st_sum.setText(f"<span style='color:#ff5c5c'>✖ {bad} problem(s)</span>")
             self.led["health"].set("bad", f"{bad} problem(s) in the status")
         elif warn:
-            self.st_sum.setText(f"<span style='color:#f5b942'>⚠ {warn} warning(s)</span>")
+            self.st_sum.setText(f"<span style='color:#ffc04d'>⚠ {warn} warning(s)</span>")
             self.led["health"].set("warn", f"{warn} warning(s)")
         elif out.strip():
             self.st_sum.setText("<span style='color:#2ecc71'>✔ All good</span>")
@@ -9229,18 +9236,18 @@ class Main(QMainWindow):
                 badge.setStyleSheet("background:#2b6cff;color:#fff;border-radius:15px;font-weight:700")
             else:
                 badge.setText(num)
-                badge.setStyleSheet("background:#222c3b;color:#7d8799;border-radius:15px;font-weight:700")
+                badge.setStyleSheet("background:#262d3b;color:#8b96ab;border-radius:15px;font-weight:700")
             b.setText(("✓ " + bt.split(" ", 1)[-1]) if ok else bt)
         w = self.ez_bar.width()
         self.ez_bar_fill.setGeometry(0, 0, int(w * done / len(self.EZ)), 8)
         if nxt:
             num, title, bt, fn = nxt
-            self.ez_title.setText(f"🚀 <b>Easy setup</b> <span style='color:#7d8799'>— step {num} of {len(self.EZ)}</span>")
+            self.ez_title.setText(f"🚀 <b>Easy setup</b> <span style='color:#8b96ab'>— step {num} of {len(self.EZ)}</span>")
             self.ez_next.setText(f"▶  Next: {title}")
             self._ez_next_fn = fn
             self.ez_next.setVisible(True)
         else:
-            self.ez_title.setText("✅ <b>All ready</b> <span style='color:#7d8799'>— board, AirSense, sensor, phone, from anywhere</span>")
+            self.ez_title.setText("✅ <b>All ready</b> <span style='color:#8b96ab'>— board, AirSense, sensor, phone, from anywhere</span>")
             self.ez_next.setVisible(False)
             self._ez_next_fn = None
         self.btn_menu.setProperty("todo", bool(nxt))         # blue dot while a step is missing
@@ -9362,9 +9369,9 @@ class Main(QMainWindow):
                     "→ the green <i>humiditySensor-…</i> network → give it the WiFi here (<b>2.4 GHz</b>).<br>"
                     "&nbsp;&nbsp;&nbsp;&nbsp;Or on the phone: WiFi <i>humiditySensor-…</i> → <b>wBox</b> app → WiFi settings.<br>"
                     "<b>3.</b> Back here → <b>🔎 Find sensor</b> again (or leave <b>auto</b> ticked — it looks every 10 minutes).<br><br>"
-                    "<span style='color:#7d8799'>Still nothing? The WiFi may keep its devices apart (client isolation / guest WiFi) "
+                    "<span style='color:#8b96ab'>Still nothing? The WiFi may keep its devices apart (client isolation / guest WiFi) "
                     "or put them on another network than the board's cable.</span>")
-        self._append_html(f"<span style='color:#f5b942'>{help_txt}</span>")
+        self._append_html(f"<span style='color:#ffc04d'>{help_txt}</span>")
         if not getattr(self, "_find_quiet", False):
             box = QMessageBox(self)
             box.setWindowTitle("🔎 Find sensor")
@@ -9506,7 +9513,7 @@ class Main(QMainWindow):
         self.btn_stop.setEnabled(False)
         self.busy_lbl.setText("")
         self.live_lbl.setText("")
-        col = "#2ecc71" if rc == 0 else ("#7d8799" if rc == -1 else "#ff5c5c")
+        col = "#2ecc71" if rc == 0 else ("#8b96ab" if rc == -1 else "#ff5c5c")
         self._append_html(f"<span style='color:{col}'>── done (exit {rc}) ──</span>")
         if any(k in cmd for k in ("scan", "add ", "restart", "update", "set-pin", "city", "clock")):
             QTimer.singleShot(4000, self.refresh_leds)
@@ -9540,7 +9547,7 @@ class Main(QMainWindow):
 
     def _term_sys(self, text, err=False, prefix="", cmd=False):
         t = (prefix + text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        col = "#ff5c5c" if err else ("#7aa2ff" if cmd else "#9fb1d0")
+        col = "#ff5c5c" if err else ("#7aa2ff" if cmd else "#c8d0e0")
         self._append_html(f"<span style='color:{col};font-weight:{700 if cmd else 400}'>{t}</span>")
 
     def resizeEvent(self, e):
