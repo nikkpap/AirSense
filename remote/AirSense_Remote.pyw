@@ -14,7 +14,7 @@ Double-click: installs what it needs (PyQt6, paramiko, qrcode) by itself.
 Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM
 """
 APP_NAME = "AirSense Remote"
-APP_VERSION = "1.5.2"
+APP_VERSION = "1.6.0"
 
 import os
 import sys
@@ -444,7 +444,18 @@ class Bus(QObject):
 
 # ═════════════════════════ UI pieces ═════════════════════════
 QSS = """
+QWidget { background: transparent; }
 * { font-family: 'Segoe UI', 'Noto Sans', sans-serif; font-size: 10.5pt; color: #e6e9ef; }
+QStatusBar { background: #0f141c; color: #7d8799; }
+QCheckBox::indicator { background: #0f141c; border: 1px solid #3d5280; border-radius: 4px; }
+QCheckBox::indicator:checked { background: #2b6cff; border-color: #2b6cff; image: none; }
+QScrollBar:vertical { background: #0f141c; width: 10px; margin: 0; border: none; }
+QScrollBar::handle:vertical { background: #2c3850; border-radius: 5px; min-height: 30px; }
+QScrollBar:horizontal { background: #0f141c; height: 10px; margin: 0; border: none; }
+QScrollBar::handle:horizontal { background: #2c3850; border-radius: 5px; min-width: 30px; }
+QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; }
+QToolTip { background: #161d29; color: #e6e9ef; border: 1px solid #2c3850; }
+QSplitter::handle { background: transparent; }
 QMainWindow, QWidget#root { background: #0f141c; }
 QDialog, QMessageBox, QInputDialog { background: #0f141c; }
 QGroupBox { border: 1px solid #222c3b; border-radius: 12px; margin-top: 14px; padding: 10px 8px 8px; }
@@ -1232,10 +1243,11 @@ class Main(QMainWindow):
         foot = QLabel(f"{APP_NAME} v{APP_VERSION} · Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM")
         foot.setObjectName("muted")
         v.addWidget(foot)
-        QShortcut(QKeySequence("Ctrl+L"), self, activated=lambda: self.term.clear())
-        QShortcut(QKeySequence("Ctrl+M"), self, activated=lambda: self.drawer.toggle())
-        QShortcut(QKeySequence("Esc"), self, activated=lambda: self.drawer.close_drawer())
-        QShortcut(QKeySequence("F5"), self, activated=lambda: (self.refresh_leds(), self.refresh_status(False)))
+        for key, fn in (("Ctrl+L", lambda: self.term.clear()), ("Ctrl+M", lambda: self.drawer.toggle()),
+                        ("Esc", lambda: self.drawer.close_drawer()),
+                        ("F5", lambda: (self.refresh_leds(), self.refresh_status(False)))):
+            sc = QShortcut(QKeySequence(key), self, activated=fn)
+            sc.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)   # also right when it lives in a tab of AirSense
         self.inp.installEventFilter(self)
         self._set_connected_ui(False)
         self._update_qr()

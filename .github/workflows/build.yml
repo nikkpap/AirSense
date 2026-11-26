@@ -40,6 +40,7 @@ jobs:
       - name: Έλεγχος κώδικα
         run: |
           python -m py_compile desktop/AirSense.pyw pi/airsense_wifi.py remote/AirSense_Remote.pyw
+          python tools/embed_remote.py --check
           bash -n pi/install_pi.sh
           for f in linux/*.sh linux/airsense; do bash -n "$f"; done
           sh -n linux/airsense-password.sh
