@@ -128,6 +128,14 @@ else
   BOOTWIFI=0
 fi
 
+# ── time zone: default Europe/Athens (until you choose another with: airsense clock Zone/City) ──
+[ -s "$DATA/timezone" ] || echo "Europe/Athens" > "$DATA/timezone"
+TZW=$(cat "$DATA/timezone" 2>/dev/null)
+if [ -f "/usr/share/zoneinfo/$TZW" ] && [ "$(readlink -f /etc/localtime)" != "$(readlink -f "/usr/share/zoneinfo/$TZW")" ]; then
+  timedatectl set-timezone "$TZW" 2>/dev/null || { ln -sf "/usr/share/zoneinfo/$TZW" /etc/localtime; echo "$TZW" > /etc/timezone; }
+  echo "✔ time zone: $TZW (UTC$(TZ=$TZW date +%:z))"
+fi
+
 systemctl daemon-reload 2>/dev/null || { mount -o remount,size=32M /run; systemctl daemon-reload; }
 [ "$RUNSIZE" = 1 ] && systemctl enable airsense-run-size >/dev/null 2>&1
 [ "$BOOTWIFI" = 1 ] && systemctl enable airsense-bootwifi >/dev/null 2>&1

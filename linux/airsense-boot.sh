@@ -149,7 +149,9 @@ else
   fi
 fi
 
-# ── time zone: the Luckfox image can put Asia/Shanghai back → re-apply the one you chose ──
+# ── time zone: the Luckfox image can put Asia/Shanghai back → re-apply the one you chose (default Europe/Athens) ──
+mkdir -p /var/lib/airsense
+[ -s /var/lib/airsense/timezone ] || echo "Europe/Athens" > /var/lib/airsense/timezone
 TZW=$(cat /var/lib/airsense/timezone 2>/dev/null)
 if [ -n "$TZW" ] && [ -f "/usr/share/zoneinfo/$TZW" ] && [ "$(readlink -f /etc/localtime)" != "$(readlink -f "/usr/share/zoneinfo/$TZW")" ]; then
   timedatectl set-timezone "$TZW" 2>/dev/null || { ln -sf "/usr/share/zoneinfo/$TZW" /etc/localtime; echo "$TZW" > /etc/timezone; }

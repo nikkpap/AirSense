@@ -17,7 +17,7 @@ SENSORS=192.168.1.241
 # City for the weather (Open-Meteo)
 CITY=Ptolemaida
 
-# Time zone, e.g. Europe/Athens (empty = the one chosen in the installer · list: timedatectl list-timezones)
+# Time zone, e.g. Europe/Athens (empty = the one chosen in the installer, default Europe/Athens · list: timedatectl list-timezones)
 TIMEZONE=
 
 # Device name on the network (→ http://NAME.local:8765)

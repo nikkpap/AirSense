@@ -131,7 +131,7 @@ wait_server() {
 
 # ── Clock: time zone from a list + NTP servers of ntppool.org (zone by region, e.g. europe) ──
 TZ_LIST="Europe/Athens Europe/Nicosia Europe/Istanbul Europe/London Europe/Lisbon Europe/Berlin Europe/Paris Europe/Rome Europe/Madrid Europe/Amsterdam Europe/Warsaw Europe/Bucharest Europe/Sofia Europe/Kyiv Europe/Moscow UTC America/New_York America/Chicago America/Los_Angeles Asia/Dubai Asia/Tokyo Australia/Sydney"
-CUR_TZ=$(timedatectl show -p Timezone --value 2>/dev/null); case "$CUR_TZ" in ''|UTC|Etc/*) CUR_TZ=Europe/Athens ;; esac
+CUR_TZ=$(timedatectl show -p Timezone --value 2>/dev/null); case "$CUR_TZ" in ''|UTC|Etc/*|Asia/Shanghai) CUR_TZ=Europe/Athens ;; esac   # Luckfox factory = Asia/Shanghai
 pick_tz() {
   local i=1 z def=1 a
   echo -e "  ${B}Time zone${N} (offset right now, summer/winter time included):"
