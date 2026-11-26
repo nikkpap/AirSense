@@ -14,7 +14,7 @@ Double-click: installs what it needs (PyQt6, paramiko, qrcode) by itself.
 Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM
 """
 APP_NAME = "AirSense Remote"
-APP_VERSION = "1.4.0"
+APP_VERSION = "1.5.0"
 
 import os
 import sys
@@ -81,7 +81,8 @@ if __name__ == "__main__" and "--no-deps" not in sys.argv:
 
 import paramiko                                                    # noqa: E402
 import qrcode                                                      # noqa: E402
-from PyQt6.QtCore import Qt, QTimer, QObject, pyqtSignal, QUrl, QSize  # noqa: E402
+from PyQt6.QtCore import Qt, QTimer, QObject, pyqtSignal, QUrl, QSize, QRect, QPoint  # noqa: E402
+from PyQt6.QtWidgets import QLayout, QScrollArea  # noqa: E402
 from PyQt6.QtGui import (QColor, QFont, QPainter, QPixmap, QIcon, QTextCursor, QDesktopServices,  # noqa: E402
                          QKeySequence, QShortcut, QFontDatabase)
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QLabel, QPushButton, QLineEdit,  # noqa: E402
@@ -533,6 +534,178 @@ class QrView(QLabel):
         self.setPixmap(pm)
 
 
+class FlowLayout(QLayout):
+    """Buttons that wrap to the next line when the window is narrow (responsive)."""
+
+    def __init__(self, parent=None, spacing=6, stretch=False):
+        super().__init__(parent)
+        self._items = []
+        self._sp = spacing
+        self._stretch = stretch
+        self.setContentsMargins(0, 0, 0, 0)
+
+    def addItem(self, item):
+        self._items.append(item)
+
+    def count(self):
+        return len(self._items)
+
+    def itemAt(self, i):
+        return self._items[i] if 0 <= i < len(self._items) else None
+
+    def takeAt(self, i):
+        return self._items.pop(i) if 0 <= i < len(self._items) else None
+
+    def expandingDirections(self):
+        return Qt.Orientation(0)
+
+    def hasHeightForWidth(self):
+        return True
+
+    def heightForWidth(self, w):
+        return self._do(QRect(0, 0, w, 0), True)
+
+    def setGeometry(self, r):
+        super().setGeometry(r)
+        self._do(r, False)
+
+    def sizeHint(self):
+        return self.minimumSize()
+
+    def minimumSize(self):
+        sz = QSize()
+        for it in self._items:
+            sz = sz.expandedTo(it.minimumSize())
+        m = self.contentsMargins()
+        return sz + QSize(m.left() + m.right(), m.top() + m.bottom())
+
+    def _do(self, r, test):
+        m = self.contentsMargins()
+        x0, y, right = r.x() + m.left(), r.y() + m.top(), r.right() - m.right()
+        rows, row, x, rh = [], [], x0, 0
+        for it in self._items:
+            if it.widget() is not None and not it.widget().isVisible() and not test:
+                continue
+            hs = it.sizeHint()
+            if row and x + hs.width() > right + 1:
+                rows.append((row, rh))
+                row, x, rh = [], x0, 0
+            row.append((it, hs))
+            x += hs.width() + self._sp
+            rh = max(rh, hs.height())
+        if row:
+            rows.append((row, rh))
+        for items, h in rows:
+            if not test:
+                # stretch the buttons of the row to fill the width (tidy grid)
+                used = sum(hs.width() for _, hs in items) + self._sp * (len(items) - 1)
+                extra = max(0, (right - x0 + 1) - used) // max(1, len(items)) if self._stretch and len(rows) > 1 else 0
+                x = x0
+                for it, hs in items:
+                    w = hs.width() + extra
+                    it.setGeometry(QRect(QPoint(x, y), QSize(w, h)))
+                    x += w + self._sp
+            y += h + self._sp
+        return y - self._sp - r.y() + m.bottom() if rows else 0
+
+
+class GridBox(QWidget):
+    """Buttons in a grid whose number of columns follows the width (responsive, no overlap)."""
+
+    def __init__(self, min_w=150, spacing=6):
+        super().__init__()
+        self.min_w, self.items, self.cols = min_w, [], 0
+        self.g = QGridLayout(self)
+        self.g.setContentsMargins(0, 0, 0, 0)
+        self.g.setSpacing(spacing)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+
+    def addWidget(self, w):
+        w.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        w.setMinimumWidth(0)
+        self.items.append(w)
+        self._lay(max(1, self.cols or 6), force=True)
+
+    def _lay(self, cols, force=False):
+        if cols == self.cols and not force:
+            return
+        self.cols = cols
+        for w in self.items:
+            self.g.removeWidget(w)
+        for i, w in enumerate(self.items):
+            self.g.addWidget(w, i // cols, i % cols)
+        for c in range(12):
+            self.g.setColumnStretch(c, 1 if c < cols else 0)
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        cols = max(1, min(len(self.items) or 1, (e.size().width() + 6) // (self.min_w + 6)))
+        if cols != self.cols:
+            QTimer.singleShot(0, lambda c=cols: (self._lay(c), self.updateGeometry()))
+
+
+class Drawer(QWidget):
+    """☰ side menu that slides over the window (Easy setup)."""
+
+    def __init__(self, host):
+        super().__init__(host)
+        self.host = host
+        self.scrim = QWidget(host)
+        self.scrim.setStyleSheet("background: rgba(0,0,0,110)")
+        self.scrim.mousePressEvent = lambda e: self.close_drawer()
+        self.scrim.hide()
+        self.setObjectName("drawer")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet("QWidget#drawer{background:#121924;border-right:1px solid #2c3850}")
+        v = QVBoxLayout(self)
+        v.setContentsMargins(12, 10, 8, 10)
+        hd = QHBoxLayout()
+        t = QLabel("☰  Menu")
+        t.setObjectName("h2")
+        hd.addWidget(t)
+        hd.addStretch()
+        x = QPushButton("✕")
+        x.setFixedWidth(40)
+        x.setToolTip("Close (Esc)")
+        x.clicked.connect(self.close_drawer)
+        hd.addWidget(x)
+        v.addLayout(hd)
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.scroll.setStyleSheet("QScrollArea{background:transparent}")
+        self.body = QWidget()
+        self.body.setObjectName("dbody")
+        self.body.setStyleSheet("QWidget#dbody{background:transparent}")
+        self.bl = QVBoxLayout(self.body)
+        self.bl.setContentsMargins(0, 0, 6, 0)
+        self.scroll.setWidget(self.body)
+        v.addWidget(self.scroll, 1)
+        self.hide()
+
+    def place(self):
+        h = self.host
+        w = min(470, max(320, int(h.width() * 0.92)))
+        self.setGeometry(0, 0, min(w, h.width()), h.height())
+        self.scrim.setGeometry(0, 0, h.width(), h.height())
+
+    def open_drawer(self):
+        self.place()
+        QTimer.singleShot(30, lambda: hasattr(self.host.window(), "_update_ez") and self.host.window()._update_ez())
+        self.scrim.show()
+        self.scrim.raise_()
+        self.show()
+        self.raise_()
+
+    def close_drawer(self):
+        self.hide()
+        self.scrim.hide()
+
+    def toggle(self):
+        self.close_drawer() if self.isVisible() else self.open_drawer()
+
+
 def card(title=None):
     fr = QFrame()
     fr.setObjectName("card")
@@ -676,7 +849,9 @@ class Main(QMainWindow):
         self.history, self.hidx = [], 0
         self._sudo_sent = False
         self.setWindowTitle(f"🌬 {APP_NAME} v{APP_VERSION}")
-        self.resize(1360, 860)
+        scr = QApplication.primaryScreen().availableGeometry() if QApplication.primaryScreen() else None
+        self.resize(min(1360, int(scr.width() * 0.92)) if scr else 1360, min(860, int(scr.height() * 0.9)) if scr else 860)
+        self.setMinimumSize(760, 520)
         self._build()
         self.bus.term.connect(self._term_lines)
         self.bus.live.connect(self._live_line)
@@ -714,16 +889,21 @@ class Main(QMainWindow):
 
         # top bar
         top, tl = card()
-        row = QHBoxLayout()
+        row = FlowLayout(spacing=8)
+        self.btn_menu = QPushButton("☰")
+        self.btn_menu.setObjectName("pri")
+        self.btn_menu.setToolTip("Menu: 🚀 Easy setup (Ctrl+M)")
+        self.btn_menu.setMinimumHeight(38)
+        self.btn_menu.clicked.connect(lambda: self.drawer.toggle())
+        row.addWidget(self.btn_menu)
         t = QLabel("🌬 AirSense Remote")
         t.setObjectName("h1")
         row.addWidget(t)
-        row.addSpacing(14)
         self.route = QComboBox()
         self.route.addItems(["Auto", "🏠 LAN", "🔤 airsense.local", "🌍 Tailscale"])
         self.route.setCurrentIndex({"auto": 0, "lan": 1, "mdns": 2, "tailscale": 3}.get(self.cfg.get("route"), 0))
         self.route.currentIndexChanged.connect(self._route_changed)
-        row.addWidget(QLabel("Route"))
+        self.route.setToolTip("Route: how to reach the board")
         row.addWidget(self.route)
         self.btn_conn = QPushButton("🔌 Connect")
         self.btn_conn.setObjectName("pri")
@@ -735,32 +915,31 @@ class Main(QMainWindow):
         b = QPushButton("🌐 Web page")
         b.clicked.connect(self.open_web)
         row.addWidget(b)
-        row.addStretch()
+        tl.addLayout(row)
         self.conn_lbl = QLabel("not connected")
         self.conn_lbl.setObjectName("muted")
-        row.addWidget(self.conn_lbl)
-        tl.addLayout(row)
-        leds = QHBoxLayout()
+        leds = FlowLayout(spacing=14)
         self.led = {k: Led(n) for k, n in (("host", "Board"), ("ssh", "SSH"), ("web", "Web :8765"),
                                             ("sensor", "Sensors"), ("ts", "Tailscale"), ("health", "Health"))}
         for k in ("host", "ssh", "web", "sensor", "ts", "health"):
             leds.addWidget(self.led[k])
-        leds.addStretch()
         self.led_time = QLabel("")
         self.led_time.setObjectName("muted")
+        leds.addWidget(self.conn_lbl)
         leds.addWidget(self.led_time)
         tl.addLayout(leds)
         v.addWidget(top)
 
         split = QSplitter(Qt.Orientation.Horizontal)
+        split.setChildrenCollapsible(False)
+        self.split = split
         v.addWidget(split, 1)
 
         # left: sensors + status + QR
         left = QTabWidget()
+        left.setMinimumWidth(330)
         self.left_tabs = left
-        ez = QWidget()
-        el = QVBoxLayout(ez)
-        el.setContentsMargins(0, 6, 0, 0)
+        self.drawer = Drawer(root)
         ec, ecl = card()
         self.ez_title = QLabel("🚀 <b>Easy setup</b>")
         self.ez_title.setStyleSheet("font-size:13pt")
@@ -774,8 +953,8 @@ class Main(QMainWindow):
         self.ez_next = QPushButton("")
         self.ez_next.setObjectName("pri")
         self.ez_next.setMinimumHeight(46)
-        self.ez_next.setStyleSheet("font-size:12pt")
-        self.ez_next.clicked.connect(lambda: self._ez_next_fn and self._ez_next_fn())
+        self.ez_next.setStyleSheet("font-size:11.5pt;text-align:left;padding-left:14px")
+        self.ez_next.clicked.connect(lambda: self._ez_next_fn and (self.drawer.close_drawer(), self._ez_next_fn()))
         self._ez_next_fn = None
         ecl.addWidget(self.ez_next)
         self.ez_rows = {}
@@ -792,26 +971,33 @@ class Main(QMainWindow):
              "🌍 Tailscale login", lambda: self.preset("airsense tailscale", "run", "Tailscale")),
         )
         for k, num, title, desc, bt, fn in self.EZ:
-            row = QHBoxLayout()
+            sf = QFrame()
+            sf.setObjectName("step")
+            sf.setStyleSheet("QFrame#step{background:#0f141c;border:1px solid #222c3b;border-radius:11px}")
+            row = QHBoxLayout(sf)
+            row.setContentsMargins(10, 8, 10, 8)
+            row.setSpacing(10)
             badge = QLabel(num)
             badge.setFixedSize(30, 30)
             badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            col = QVBoxLayout()
+            col.setSpacing(6)
             lb = QLabel(f"<b>{title}</b><br><span style='color:#7d8799'>{desc}</span>")
             lb.setWordWrap(True)
             b = QPushButton(bt)
-            b.setMinimumWidth(175)
-            b.clicked.connect(fn)
-            row.addWidget(badge)
-            row.addWidget(lb, 1)
-            row.addWidget(b)
-            ecl.addLayout(row)
+            b.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+            b.clicked.connect(lambda _=False, f=fn: (self.drawer.close_drawer(), f()))
+            col.addWidget(lb)
+            col.addWidget(b, 0, Qt.AlignmentFlag.AlignLeft)
+            row.addWidget(badge, 0, Qt.AlignmentFlag.AlignTop)
+            row.addLayout(col, 1)
+            ecl.addWidget(sf)
             self.ez_rows[k] = (badge, b)
         tip = QLabel("<span style='color:#7d8799'>Moved / new WiFi? Only step 3 again — the rest finds the new addresses by itself.</span>")
         tip.setWordWrap(True)
         ecl.addWidget(tip)
-        el.addWidget(ec)
-        el.addStretch()
-        left.addTab(ez, "🚀 Easy setup")
+        self.drawer.bl.addWidget(ec)
+        self.drawer.bl.addStretch()
         # — Overview tab
         ov = QWidget()
         ol = QVBoxLayout(ov)
@@ -827,7 +1013,7 @@ class Main(QMainWindow):
         self.chk_autofind.setChecked(bool(self.cfg.get("auto_find", True)))
         self.chk_autofind.toggled.connect(self._autofind_toggled)
         sh.addWidget(self.chk_autofind)
-        self.btn_find = QPushButton("🔎 Find sensor")
+        self.btn_find = QPushButton("🔎 Find")
         self.btn_find.setObjectName("pri")
         self.btn_find.setToolTip("Automatic check: board scan → PC scan → add → tell me what is wrong")
         self.btn_find.clicked.connect(lambda: self.find_sensor(quiet=False))
@@ -897,8 +1083,7 @@ class Main(QMainWindow):
         self.btn_more.clicked.connect(self._toggle_more)
         chd.addWidget(self.btn_more)
         ccl.addLayout(chd)
-        quick = QHBoxLayout()
-        quick.setSpacing(6)
+        quick = GridBox(132)
         QUICK = (("🩺 Status", "airsense status", "status"), ("⬇ Update", "airsense update", "run"),
                  ("🔎 Find sensor", "", "find"), ("📄 Phone guide", "", "guide"),
                  ("↻ Restart", "airsense restart", "run"), ("📜 Logs", "airsense logs", "run"))
@@ -909,12 +1094,11 @@ class Main(QMainWindow):
             b.clicked.connect(lambda _=False, c=cmd, k=kind, lb=label: self.preset(c, k, lb))
             quick.addWidget(b)
             self.cmd_buttons.append(b)
-        ccl.addLayout(quick)
+        ccl.addWidget(quick)
         self.more_box = QWidget()
-        grid = QGridLayout(self.more_box)
+        grid = QVBoxLayout(self.more_box)
         grid.setContentsMargins(0, 6, 0, 0)
-        grid.setHorizontalSpacing(6)
-        grid.setVerticalSpacing(6)
+        grid.setSpacing(4)
         groups = []
         for g, *_ in COMMANDS:
             if g not in groups:
@@ -922,19 +1106,31 @@ class Main(QMainWindow):
         for gi, g in enumerate(groups):
             gl = QLabel(g)
             gl.setObjectName("muted")
-            grid.addWidget(gl, gi, 0)
+            grid.addWidget(gl)
+            gf = GridBox(132)
+            grid.addWidget(gf)
             for ci, (gg, label, cmd, kind, tip) in enumerate([c for c in COMMANDS if c[0] == g]):
                 b = QPushButton(label)
                 b.setToolTip(f"{tip}\n$ {cmd}")
                 if kind == "confirm":
                     b.setObjectName("danger")
                 b.clicked.connect(lambda _=False, c=cmd, k=kind, lb=label: self.preset(c, k, lb))
-                grid.addWidget(b, gi, ci + 1)
+                gf.addWidget(b)
                 self.cmd_buttons.append(b)
         ccl.addWidget(self.more_box)
         self.more_box.setVisible(bool(self.cfg.get("show_all_commands", False)))
         self.btn_more.setText("▾ Fewer commands" if self.more_box.isVisible() else "▸ All commands")
-        rl.addWidget(cc)
+        self.cmd_card = cc
+        self.cmd_scroll = QScrollArea()
+        self.cmd_scroll.setWidgetResizable(True)
+        self.cmd_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.cmd_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.cmd_scroll.setStyleSheet("QScrollArea{background:transparent}")
+        self.cmd_scroll.setWidget(cc)
+        self.rsplit = QSplitter(Qt.Orientation.Vertical)
+        self.rsplit.setChildrenCollapsible(False)
+        self.rsplit.addWidget(self.cmd_scroll)
+        rl.addWidget(self.rsplit, 1)
 
         tc, tcl = card()
         th = QHBoxLayout()
@@ -988,7 +1184,10 @@ class Main(QMainWindow):
         b.clicked.connect(self.send_input)
         ir.addWidget(b)
         tcl.addLayout(ir)
-        rl.addWidget(tc, 1)
+        tc.setMinimumHeight(220)
+        self.rsplit.addWidget(tc)
+        self.rsplit.setStretchFactor(1, 1)
+        QTimer.singleShot(0, self._fit_cmds)
         split.addWidget(right)
         split.setSizes([520, 840])
 
@@ -996,6 +1195,8 @@ class Main(QMainWindow):
         foot.setObjectName("muted")
         v.addWidget(foot)
         QShortcut(QKeySequence("Ctrl+L"), self, activated=lambda: self.term.clear())
+        QShortcut(QKeySequence("Ctrl+M"), self, activated=lambda: self.drawer.toggle())
+        QShortcut(QKeySequence("Esc"), self, activated=lambda: self.drawer.close_drawer())
         QShortcut(QKeySequence("F5"), self, activated=lambda: (self.refresh_leds(), self.refresh_status(False)))
         self.inp.installEventFilter(self)
         self._set_connected_ui(False)
@@ -1136,6 +1337,7 @@ class Main(QMainWindow):
         self.btn_conn.setText("⏏ Disconnect" if on else "🔌 Connect")
         if hasattr(self, "ez_rows"):
             QTimer.singleShot(0, self._update_ez)
+        QTimer.singleShot(60, self._fit_cmds)
         for b in self.cmd_buttons:
             b.setEnabled(on)
         if hasattr(self, "btn_find"):
@@ -1250,10 +1452,13 @@ class Main(QMainWindow):
             dot.setStyleSheet(f"color:{'#2ecc71' if d.get('online') else '#ff5c5c'}; font-size:16pt")
             h.addWidget(dot)
             nm = QLabel(f"<b>{d.get('name') or d.get('id')}</b><br><span style='color:#7d8799'>{d.get('ip')} · {d.get('type') or ''}</span>")
+            nm.setWordWrap(True)
+            nm.setMinimumWidth(40)
+            nm.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
             h.addWidget(nm, 1)
             t, hu = d.get("t"), d.get("h")
-            val = QLabel(f"<span style='color:#ff9f43;font-size:20pt;font-weight:700'>{'—' if t is None else f'{t:.1f}°C'}</span>"
-                         f"&nbsp;&nbsp;<span style='color:#4da3ff;font-size:20pt;font-weight:700'>{'—' if hu is None else f'{hu:.1f}%'}</span>")
+            val = QLabel(f"<span style='color:#ff9f43;font-size:18pt;font-weight:700'>{'—' if t is None else f'{t:.1f}°C'}</span>"
+                         f"&nbsp;&nbsp;<span style='color:#4da3ff;font-size:18pt;font-weight:700'>{'—' if hu is None else f'{hu:.1f}%'}</span>")
             h.addWidget(val)
             fr.setToolTip(f"dew point {d.get('dp')} °C · absolute {d.get('ah')} g/m³\n{d.get('error') or ''}")
             self.sens_box.addWidget(fr)
@@ -1330,6 +1535,19 @@ class Main(QMainWindow):
         self.btn_more.setText("▾ Fewer commands" if on else "▸ All commands")
         self.cfg["show_all_commands"] = on
         save_cfg(self.cfg)
+        QTimer.singleShot(0, self._fit_cmds)
+
+    def _fit_cmds(self):
+        """Commands card: as tall as its buttons (scrolls when the window is small); the terminal gets the rest."""
+        if not hasattr(self, "rsplit"):
+            return
+        total = sum(self.rsplit.sizes()) or self.rsplit.height()
+        w = self.cmd_scroll.viewport().width() or self.cmd_card.width()
+        lay = self.cmd_card.layout()
+        need = lay.heightForWidth(w) if lay.hasHeightForWidth() else self.cmd_card.sizeHint().height()
+        need = max(need, self.cmd_card.minimumSizeHint().height()) + 30
+        top = max(90, min(need, total - 220))
+        self.rsplit.setSizes([top, max(220, total - top)])
 
     def _ez_board(self):
         if self.conn and self.conn.alive:
@@ -1375,9 +1593,14 @@ class Main(QMainWindow):
             self.ez_title.setText("✅ <b>All ready</b> <span style='color:#7d8799'>— board, AirSense, sensor, phone, from anywhere</span>")
             self.ez_next.setVisible(False)
             self._ez_next_fn = None
+        self.btn_menu.setText(f"☰  Setup {done}/{len(self.EZ)}" if nxt else "☰")
+        self.btn_menu.setObjectName("pri" if nxt else "")
+        self.btn_menu.style().unpolish(self.btn_menu)
+        self.btn_menu.style().polish(self.btn_menu)
         if not getattr(self, "_ez_tab_chosen", False) and self.led_time.text():
-            self._ez_tab_chosen = True                  # first check: open on Easy setup only while something is missing
-            self.left_tabs.setCurrentIndex(0 if nxt else 1)
+            self._ez_tab_chosen = True                  # first check: open the ☰ Easy setup only while something is missing
+            if nxt:
+                self.drawer.open_drawer()
 
     # ── 📄 phone guide PDF (made by the board's server) ──
     def phone_guide(self, open_it=True):
@@ -1669,6 +1892,13 @@ class Main(QMainWindow):
         t = (prefix + text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         col = "#ff5c5c" if err else ("#7aa2ff" if cmd else "#9fb1d0")
         self._append_html(f"<span style='color:{col};font-weight:{700 if cmd else 400}'>{t}</span>")
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        if hasattr(self, "drawer") and self.drawer.isVisible():
+            self.drawer.place()
+        if hasattr(self, "ez_rows"):
+            QTimer.singleShot(0, self._update_ez)
 
     def closeEvent(self, e):
         try:

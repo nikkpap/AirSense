@@ -15,7 +15,7 @@ Developer : Nikolaos K. Paridis (aka nikkpap) — ALU DEV TEAM
 APP_NAME = "AirSense"
 OLD_APP_NAMES = ("ALU HygroLink", "ALU AirSense")   # παλιά ονόματα (μεταφορά δεδομένων/ρυθμίσεων)
 OLD_APP_NAME = OLD_APP_NAMES[0]
-APP_VERSION = "1.6.21"
+APP_VERSION = "1.6.22"
 AUTHOR = "Nikolaos K. Paridis (aka nikkpap)"
 TEAM = "ALU DEV TEAM"
 
@@ -2003,6 +2003,127 @@ def build_pdf_report(info):
 # ═══════════════════════════════════════════════════════════════════════════
 # 8) Email
 # ═══════════════════════════════════════════════════════════════════════════
+# ── Γρήγορη σύνδεση Microsoft (Outlook / Hotmail / Live / Microsoft 365) ──
+# Τα λογαριασμοί Outlook.com δεν δέχονται πια κωδικό στο SMTP (ούτε κωδικό εφαρμογής) → σύνδεση OAuth2
+# με «κωδικό συσκευής»: δείχνουμε έναν κωδικό, ο χρήστης μπαίνει στο microsoft.com/link από όποια συσκευή
+# θέλει (PC ή κινητό) και πατάει «Αποδοχή». Δουλεύει και στην πλακέτα (χωρίς οθόνη).
+# MS_CLIENT_ID = «Application (client) ID» μιας δωρεάν καταχώρισης στο portal.azure.com (δημόσιο, όχι μυστικό).
+MS_CLIENT_ID = ""
+MS_AUTH = "https://login.microsoftonline.com/common/oauth2/v2.0/"
+MS_SCOPE = "https://outlook.office.com/SMTP.Send offline_access openid email profile"
+MS_PERSONAL = ("outlook.", "hotmail.", "live.", "msn.", "passport.", "windowslive.")
+GMAIL_APP_PW = "https://myaccount.google.com/apppasswords"
+MS_APP_GUIDE = "https://github.com/nikkpap/AirSense#-email-quick-login"
+_MAIL_SAVE = None            # Engine.save_cfg → σώζει το νέο refresh token της Microsoft
+_MS_TOK = {}                 # refresh(enc) → (access token, λήξη)
+
+
+def ms_client_id(e):
+    return (e.get("ms_client_id") or MS_CLIENT_ID or "").strip()
+
+
+def ms_smtp_host(email):
+    dom = email.split("@")[-1].lower()
+    return "smtp-mail.outlook.com" if dom.startswith(MS_PERSONAL) else "smtp.office365.com"
+
+
+def _form_post(url, data):
+    req = urllib.request.Request(url, data=urllib.parse.urlencode(data).encode(),
+                                 headers={"Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=25) as r:
+            return json.loads(r.read().decode("utf-8"))
+    except urllib.error.HTTPError as ex:
+        try:
+            return json.loads(ex.read().decode("utf-8"))
+        except Exception:
+            raise RuntimeError(f"HTTP {ex.code}")
+
+
+def _jwt_claims(tok):
+    try:
+        part = tok.split(".")[1]
+        return json.loads(base64.urlsafe_b64decode(part + "=" * (-len(part) % 4)))
+    except Exception:
+        return {}
+
+
+def ms_access_token(e):
+    rt_enc = e.get("oauth_refresh", "")
+    rt = dec_secret(rt_enc)
+    if not rt:
+        raise RuntimeError("Δεν υπάρχει σύνδεση Microsoft — πατήστε «Σύνδεση Outlook»")
+    tok = _MS_TOK.get(rt_enc)
+    if tok and tok[1] > time.time() + 120:
+        return tok[0]
+    j = _form_post(MS_AUTH + "token", {"client_id": ms_client_id(e), "grant_type": "refresh_token",
+                                       "refresh_token": rt, "scope": MS_SCOPE})
+    if "access_token" not in j:
+        raise RuntimeError("Η σύνδεση Microsoft έληξε — πατήστε ξανά «Σύνδεση Outlook» "
+                           f"({j.get('error_description', j.get('error', ''))[:120]})")
+    if j.get("refresh_token") and j["refresh_token"] != rt:      # η Microsoft αλλάζει το refresh token
+        e["oauth_refresh"] = enc_secret(j["refresh_token"])
+        if _MAIL_SAVE:
+            try:
+                _MAIL_SAVE()
+            except Exception:
+                pass
+    _MS_TOK[e.get("oauth_refresh", "")] = (j["access_token"], time.time() + int(j.get("expires_in", 3600)))
+    return j["access_token"]
+
+
+def _smtp_open(e):
+    """Σύνδεση + είσοδος στον SMTP (κωδικός ή Microsoft OAuth2)."""
+    port = int(e.get("port") or 587)
+    sec = e.get("security", "STARTTLS")
+    ctx = ssl.create_default_context()
+    if sec == "SSL":
+        srv = smtplib.SMTP_SSL(e["host"], port, context=ctx, timeout=25)
+    else:
+        srv = smtplib.SMTP(e["host"], port, timeout=25)
+        if sec == "STARTTLS":
+            srv.starttls(context=ctx)
+    try:
+        if e.get("auth") == "oauth_ms":
+            tok = ms_access_token(e)
+            user = e.get("user", "")
+            srv.ehlo()
+            srv.auth("XOAUTH2", lambda challenge=None: f"user={user}\x01auth=Bearer {tok}\x01\x01",
+                     initial_response_ok=True)
+        elif e.get("user"):
+            srv.login(e["user"], dec_secret(e.get("password", "")))
+    except smtplib.SMTPAuthenticationError as ex:
+        try:
+            srv.quit()
+        except Exception:
+            pass
+        txt = (ex.smtp_error or b"").decode("utf-8", "replace")
+        if "basic authentication is disabled" in txt.lower():
+            raise RuntimeError("Η Microsoft δεν δέχεται κωδικό → πατήστε «🟦 Σύνδεση Outlook» (γρήγορη σύνδεση).")
+        if "gmail" in e.get("host", "") or "Application-specific" in txt:
+            raise RuntimeError("Η Google δεν δέχτηκε τον κωδικό → χρειάζεται «Κωδικός εφαρμογής» 16 γραμμάτων "
+                               "(πατήστε «🔵 Σύνδεση Google»).")
+        raise RuntimeError(f"Λάθος χρήστης / κωδικός ({ex.smtp_code})")
+    except Exception:
+        try:
+            srv.quit()
+        except Exception:
+            pass
+        raise
+    return srv
+
+
+def smtp_check(e):
+    srv = _smtp_open(e)
+    try:
+        srv.noop()
+    finally:
+        try:
+            srv.quit()
+        except Exception:
+            pass
+
+
 def send_mail(e, subject, body, attachments=()):
     to = [x.strip() for x in re.split(r"[,;]", e.get("to", "")) if x.strip()]
     if not e.get("host") or not to:
@@ -2014,19 +2135,8 @@ def send_mail(e, subject, body, attachments=()):
     msg.set_content(body)
     for fname, data, maintype, subtype in attachments:
         msg.add_attachment(data, maintype=maintype, subtype=subtype, filename=fname)
-    port = int(e.get("port") or 587)
-    sec = e.get("security", "STARTTLS")
-    ctx = ssl.create_default_context()
-    pwd = dec_secret(e.get("password", ""))
-    if sec == "SSL":
-        srv = smtplib.SMTP_SSL(e["host"], port, context=ctx, timeout=25)
-    else:
-        srv = smtplib.SMTP(e["host"], port, timeout=25)
-        if sec == "STARTTLS":
-            srv.starttls(context=ctx)
+    srv = _smtp_open(e)
     try:
-        if e.get("user"):
-            srv.login(e["user"], pwd)
         srv.send_message(msg)
     finally:
         try:
@@ -2043,6 +2153,9 @@ class Engine:
         ensure_dirs()
         self.cfg = load_cfg()
         self.lock = threading.RLock()
+        self.ms_flow = {}
+        global _MAIL_SAVE
+        _MAIL_SAVE = self.save_cfg
         self.store = Store(DB_PATH)
         self.live = {}
         self.events = deque(maxlen=500)
@@ -2566,6 +2679,105 @@ class Engine:
             self.log(f"Αποστολή αναφοράς απέτυχε: {e}", "err")
             return False, f"Σφάλμα: {e}"
 
+    # ── γρήγορη σύνδεση email ──
+    def _mail_ready(self, e):
+        if not e.get("to"):
+            e["to"] = e.get("user", "")
+        if not e.get("enabled"):
+            self.cfg["last_report_date"] = datetime.now().strftime("%Y-%m-%d")   # πρώτη αναφορά αύριο
+        e["enabled"] = True
+
+    def gmail_login(self, user, app_pw, to=""):
+        """Google: email + κωδικός εφαρμογής → έλεγχος σύνδεσης → αποθήκευση."""
+        user = user.strip()
+        app_pw = re.sub(r"\s+", "", app_pw)
+        if "@" not in user or len(app_pw) < 8:
+            return False, "Γράψτε το email και τον κωδικό εφαρμογής (16 γράμματα)"
+        e = dict(self.cfg["email"], host="smtp.gmail.com", port=587, security="STARTTLS", auth="password",
+                 user=user, password=enc_secret(app_pw))
+        try:
+            smtp_check(e)
+        except Exception as ex:
+            return False, str(ex)
+        with self.lock:
+            e["oauth_refresh"] = ""
+            if to.strip():
+                e["to"] = to.strip()
+            self._mail_ready(e)
+            self.cfg["email"].clear()
+            self.cfg["email"].update(e)
+            self.save_cfg()
+        self.log(f"✉ Συνδέθηκε Google: {user}")
+        return True, f"✔ Συνδέθηκε: {user}"
+
+    def ms_login_start(self, client_id=""):
+        """Microsoft: ξεκινά σύνδεση με κωδικό συσκευής· η πρόοδος στο self.ms_flow."""
+        e = self.cfg["email"]
+        if client_id.strip():
+            e["ms_client_id"] = client_id.strip()
+            self.save_cfg()
+        cid = ms_client_id(e)
+        if not cid:
+            self.ms_flow = {"stage": "need_id", "msg": "Χρειάζεται Microsoft App ID (μία φορά)"}
+            return self.ms_flow
+        try:
+            j = _form_post(MS_AUTH + "devicecode", {"client_id": cid, "scope": MS_SCOPE})
+        except Exception as ex:
+            self.ms_flow = {"stage": "error", "msg": f"Χωρίς internet; ({ex})"}
+            return self.ms_flow
+        if "user_code" not in j:
+            self.ms_flow = {"stage": "error", "msg": j.get("error_description", str(j))[:300]}
+            return self.ms_flow
+        flow = {"stage": "wait", "code": j["user_code"], "url": j.get("verification_uri", "https://microsoft.com/devicelogin"),
+                "msg": "Ανοίξτε τη σελίδα, γράψτε τον κωδικό και πατήστε «Αποδοχή»", "id": time.time()}
+        self.ms_flow = flow
+
+        def poll():
+            dl = time.time() + int(j.get("expires_in", 900))
+            iv = int(j.get("interval", 5))
+            while time.time() < dl and self.ms_flow is flow:
+                time.sleep(iv)
+                try:
+                    t = _form_post(MS_AUTH + "token", {"client_id": cid, "device_code": j["device_code"],
+                                                       "grant_type": "urn:ietf:params:oauth:grant-type:device_code"})
+                except Exception:
+                    continue
+                err = t.get("error")
+                if err == "authorization_pending":
+                    continue
+                if err == "slow_down":
+                    iv += 5
+                    continue
+                if err or "refresh_token" not in t:
+                    flow.update(stage="error", msg={"authorization_declined": "Ακυρώθηκε από τον χρήστη",
+                                                    "expired_token": "Ο κωδικός έληξε — ξαναδοκιμάστε"}.get(
+                        err, t.get("error_description", str(err))[:300]))
+                    return
+                c = _jwt_claims(t.get("id_token", ""))
+                user = c.get("email") or c.get("preferred_username") or ""
+                with self.lock:
+                    e = self.cfg["email"]
+                    e.update(auth="oauth_ms", oauth_refresh=enc_secret(t["refresh_token"]), user=user,
+                             host=ms_smtp_host(user), port=587, security="STARTTLS", password="", sender="")
+                    _MS_TOK[e["oauth_refresh"]] = (t["access_token"], time.time() + int(t.get("expires_in", 3600)))
+                    self._mail_ready(e)
+                    self.save_cfg()
+                self.log(f"✉ Συνδέθηκε Microsoft: {user}")
+                flow.update(stage="ok", user=user, msg=f"✔ Συνδέθηκε: {user}")
+                return
+            if self.ms_flow is flow and flow["stage"] == "wait":
+                flow.update(stage="error", msg="Ο κωδικός έληξε — ξαναδοκιμάστε")
+        threading.Thread(target=poll, daemon=True).start()
+        return flow
+
+    def mail_logout(self):
+        with self.lock:
+            e = self.cfg["email"]
+            e.update(auth="password", oauth_refresh="", password="", enabled=False)
+            self.save_cfg()
+        self.ms_flow = {}
+        self.log("✉ Αποσύνδεση email")
+
     def send_test(self):
         try:
             send_mail(self.cfg["email"], f"[{APP_NAME}] Δοκιμαστικό email",
@@ -2894,6 +3106,23 @@ button.pri{background:#2b6cff!important;color:#fff}.badge{background:#e6eaf2}.wa
   <div class="sec"><b>⏱ Μέτρηση κάθε (δευτ.)</b>
    <div class="row"><input id="poll" type="number" min="2" style="width:110px"><button onclick="post('/api/config',{poll_seconds:+$('poll').value})">💾</button></div></div>
   <div class="sec"><b>✉ Email (SMTP)</b>
+   <div class="row"><button class="pri" onclick="gOpen()">🔵 Σύνδεση Google</button><button class="pri" onclick="msGo()">🟦 Σύνδεση Outlook</button>
+    <button onclick="if(confirm('Αποσύνδεση email;'))post('/api/admin/email/logout',{admin:ADM}).then(admLoad)">⏏</button></div>
+   <div id="eStat" class="mut"></div>
+   <div id="gBox" style="display:none" class="frm">
+    <div class="mut">1) Βάλτε το Gmail σας · 2) πατήστε 🔑 και φτιάξτε «Κωδικό εφαρμογής» (όνομα: AirSense) · 3) επικολλήστε τον.</div>
+    <label>Gmail<input id="gUser" placeholder="you@gmail.com"></label>
+    <label>Κωδικός εφαρμογής <a href="https://myaccount.google.com/apppasswords" target="_blank">🔑 άνοιγμα</a><input id="gPw" placeholder="abcd efgh ijkl mnop"></label>
+    <div class="row"><button class="pri" onclick="gLogin()">✔ Σύνδεση & έλεγχος</button></div></div>
+   <div id="msBox" style="display:none;text-align:center">
+    <div class="mut">Ανοίξτε <a id="msUrl" target="_blank" href="https://microsoft.com/devicelogin">microsoft.com/devicelogin</a> και γράψτε:</div>
+    <div id="msCode" style="font-size:28px;font-weight:800;letter-spacing:3px;margin:6px 0">…</div>
+    <div class="row" style="justify-content:center"><button onclick="navigator.clipboard&&navigator.clipboard.writeText($('msCode').textContent)">📋 Αντιγραφή</button></div>
+    <div id="msMsg" class="mut"></div></div>
+   <div id="msId" style="display:none" class="frm"><div class="mut">Μία φορά: Microsoft App (client) ID — <a href="https://github.com/nikkpap/AirSense#-email-quick-login" target="_blank">οδηγίες</a></div>
+    <label>App ID<input id="msCid" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></label>
+    <div class="row"><button class="pri" onclick="msGo($('msCid').value)">✔ Συνέχεια</button></div></div>
+   <details><summary class="mut">⚙ Χειροκίνητες ρυθμίσεις</summary>
    <div class="frm">
     <label>Πάροχος<select id="eprov" onchange="eProv()"><option value="">—</option><option>Gmail</option><option>Outlook</option><option>Yahoo</option></select></label>
     <label>SMTP server<input id="ehost"></label><label>Θύρα<input id="eport" type="number"></label>
@@ -2904,7 +3133,7 @@ button.pri{background:#2b6cff!important;color:#fff}.badge{background:#e6eaf2}.wa
    </div>
    <div class="row"><label><input type="checkbox" id="een"> Ενεργό</label><label><input type="checkbox" id="edaily"> Ημερήσια αναφορά</label><label><input type="checkbox" id="ealarm"> Email σε ειδοποίηση</label></div>
    <div class="row"><button class="pri" onclick="eSave()">💾 Αποθήκευση</button><button onclick="post('/api/admin/email/test',{admin:ADM})">✉ Δοκιμή</button></div>
-   <div class="mut">Gmail: χρειάζεται «Κωδικός εφαρμογής» (App Password).</div></div>
+   <div class="mut">Gmail: χρειάζεται «Κωδικός εφαρμογής» (App Password). Outlook/Hotmail: μόνο με «Σύνδεση Outlook».</div></details></div>
   <div class="sec"><b>🔑 PIN για web/κινητό</b>
    <div class="row"><input id="pin" placeholder="κενό = χωρίς PIN"><button onclick="pinSave()">💾</button></div></div>
   <div class="sec"><b>🔐 Νέος κωδικός διαχειριστή</b>
@@ -3024,8 +3253,20 @@ async function admLoad(){
  $('ehost').value=e.host||'';$('eport').value=e.port||587;$('esec').value=e.security||'STARTTLS';$('euser').value=e.user||'';
  $('efrom').value=e.sender||'';$('eto').value=e.to||'';$('etime').value=e.report_time||'08:00';$('een').checked=!!e.enabled;
  $('edaily').checked=!!e.daily_report;$('ealarm').checked=!!e.alarm_mails;$('epwh').textContent=e.has_password?'(αποθηκευμένος)':'';
+ $('eStat').textContent=e.user?((e.enabled?'✅ ':'⏸ ')+e.user+(e.auth==='oauth_ms'?' · Microsoft':(e.host||'').includes('gmail')?' · Google':'')):'Δεν έχει οριστεί email — πατήστε Σύνδεση Google ή Outlook';
  $('pin').value=st.pin||'';$('poll').value=st.config.poll_seconds;$('admPlace').textContent=st.weather.place||'—';
  $('admInfo').textContent=`v${st.version} · δεδομένα: ${st.data_dir}`;}
+let msT=null;
+function gOpen(){$('gBox').style.display='';$('msBox').style.display='none';$('msId').style.display='none';}
+async function gLogin(){$('eStat').textContent='⏳ Έλεγχος…';const j=await post('/api/admin/email/gmail',{admin:ADM,user:$('gUser').value,app_pw:$('gPw').value});
+ $('eStat').textContent=j.msg||'';if(j.ok){$('gBox').style.display='none';$('gPw').value='';admLoad();}}
+async function msGo(cid){$('gBox').style.display='none';const j=await post('/api/admin/email/ms_start',{admin:ADM,client_id:cid||''});
+ if(j.stage==='need_id'){$('msId').style.display='';return;} $('msId').style.display='none';
+ if(j.stage!=='wait'){$('eStat').textContent='✖ '+(j.msg||'');return;}
+ $('msBox').style.display='';$('msCode').textContent=j.code;$('msUrl').href=j.url;$('msUrl').textContent=j.url.replace('https://','');$('msMsg').textContent=j.msg;
+ try{navigator.clipboard.writeText(j.code);}catch(e){} window.open(j.url,'_blank');
+ clearInterval(msT);msT=setInterval(async()=>{const s=await post('/api/admin/email/ms_state',{admin:ADM});$('msMsg').textContent=s.msg||'';
+  if(s.stage!=='wait'){clearInterval(msT);$('eStat').textContent=s.msg||'';if(s.stage==='ok'){$('msBox').style.display='none';admLoad();}}},3000);}
 function eProv(){const m={Gmail:['smtp.gmail.com',587,'STARTTLS'],Outlook:['smtp-mail.outlook.com',587,'STARTTLS'],Yahoo:['smtp.mail.yahoo.com',465,'SSL']}[$('eprov').value];
  if(m){$('ehost').value=m[0];$('eport').value=m[1];$('esec').value=m[2];}}
 function eSave(){post('/api/admin/email',{admin:ADM,host:$('ehost').value,port:+$('eport').value,security:$('esec').value,user:$('euser').value,
@@ -3221,7 +3462,8 @@ def make_handler(engine):
                         e = engine.cfg["email"]
                         return self._send(200, {"ok": True, "email": {k: e.get(k) for k in (
                             "enabled", "host", "port", "security", "user", "sender", "to", "daily_report", "report_time",
-                            "alarm_mails")} | {"has_password": bool(e.get("password"))},
+                            "alarm_mails")} | {"has_password": bool(e.get("password")), "auth": e.get("auth", "password"),
+                                                "ms_id": bool(ms_client_id(e))},
                             "pin": engine.cfg["server"].get("pin", ""), "config": engine.config_dict(),
                             "weather": engine.wx_place(), "data_dir": DATA_DIR, "version": APP_VERSION})
                     if p == "/api/admin/email":
@@ -3242,6 +3484,18 @@ def make_handler(engine):
                             engine.save_cfg()
                         engine.log("Ρυθμίσεις email άλλαξαν (web)")
                         return self._send(200, {"ok": True, "msg": "Οι ρυθμίσεις email αποθηκεύτηκαν"})
+                    if p == "/api/admin/email/gmail":
+                        ok, msg = engine.gmail_login(str(body.get("user", "")), str(body.get("app_pw", "")),
+                                                     str(body.get("to", "")))
+                        return self._send(200, {"ok": ok, "msg": msg})
+                    if p == "/api/admin/email/ms_start":
+                        f = engine.ms_login_start(str(body.get("client_id", "")))
+                        return self._send(200, {"ok": f.get("stage") == "wait", **f})
+                    if p == "/api/admin/email/ms_state":
+                        return self._send(200, {"ok": True, **(engine.ms_flow or {"stage": ""})})
+                    if p == "/api/admin/email/logout":
+                        engine.mail_logout()
+                        return self._send(200, {"ok": True, "msg": "Αποσυνδέθηκε"})
                     if p == "/api/admin/email/test":
                         ok, msg = engine.send_test()
                         return self._send(200, {"ok": ok, "msg": "Στάλθηκε δοκιμαστικό email ✔" if ok else f"Σφάλμα: {msg}"})
@@ -6083,6 +6337,21 @@ if not HEADLESS:
             preset = QComboBox()
             preset.addItems(["— Γρήγορη ρύθμιση —", "Gmail", "Outlook / Hotmail", "Yahoo"])
             preset.currentTextChanged.connect(self._preset)
+            quick = QHBoxLayout()
+            bg = _btn("🔵  Σύνδεση Google", self._gmail_login, True)
+            bm = _btn("🟦  Σύνδεση Outlook", self._ms_login, True)
+            bo = _btn("⏏", self._mail_logout)
+            bo.setToolTip("Αποσύνδεση email")
+            bo.setFixedWidth(46)
+            for b in (bg, bm):
+                b.setMinimumHeight(44)
+                quick.addWidget(b, 1)
+            quick.addWidget(bo)
+            f.addRow(quick)
+            self.em_stat = QLabel()
+            self.em_stat.setWordWrap(True)
+            f.addRow(self.em_stat)
+            f.addRow(QLabel("<span style='color:#8b96ab'>— ή χειροκίνητα —</span>"))
             f.addRow(self.em_en)
             f.addRow("Πάροχος:", preset)
             f.addRow("SMTP server:", self.em_host)
@@ -6092,7 +6361,8 @@ if not HEADLESS:
             f.addRow("Κωδικός:", self.em_pwd)
             f.addRow("Αποστολέας:", self.em_from)
             f.addRow("Παραλήπτες:", self.em_to)
-            hint = QLabel("<span style='color:#8b96ab'>Gmail: χρειάζεται <b>Κωδικός εφαρμογής</b> (App Password) από "
+            hint = QLabel("<span style='color:#8b96ab'>Outlook / Hotmail: μόνο με <b>🟦 Σύνδεση Outlook</b> (η Microsoft δεν δέχεται κωδικό). "
+                          "Gmail: χρειάζεται <b>Κωδικός εφαρμογής</b> (App Password) από "
                           "<a style='color:#3fa7ff' href='https://myaccount.google.com/apppasswords'>myaccount.google.com/apppasswords</a> "
                           "(απαιτεί 2-Step Verification). Ο κωδικός αποθηκεύεται κρυπτογραφημένος.</span>")
             hint.setWordWrap(True)
@@ -6100,6 +6370,7 @@ if not HEADLESS:
             f.addRow(hint)
             lay.setContentsMargins(0, 0, 0, 0)
             lay.addWidget(g, 1, Qt.AlignmentFlag.AlignTop)
+            self._mail_ui()
 
             right = QVBoxLayout()
             g2 = QGroupBox("Ημερήσια αναφορά (συνημμένα PDF + CSV + XML)")
@@ -6156,7 +6427,182 @@ if not HEADLESS:
             lay.addLayout(right, 1)
             return w
 
+        def _mail_ui(self):
+            e = self.engine.cfg["email"]
+            oauth = e.get("auth") == "oauth_ms"
+            for w_ in (self.em_en, self.em_host, self.em_port, self.em_sec, self.em_user, self.em_pwd, self.em_from, self.em_to):
+                w_.blockSignals(True)
+            self.em_en.setChecked(bool(e.get("enabled")))
+            self.em_host.setText(e.get("host", ""))
+            self.em_port.setValue(int(e.get("port", 587)))
+            self.em_sec.setCurrentText(e.get("security", "STARTTLS"))
+            self.em_user.setText(e.get("user", ""))
+            self.em_pwd.setText("" if oauth else dec_secret(e.get("password", "")))
+            self.em_to.setText(e.get("to", ""))
+            for w_ in (self.em_en, self.em_host, self.em_port, self.em_sec, self.em_user, self.em_pwd, self.em_from, self.em_to):
+                w_.blockSignals(False)
+            self.em_pwd.setEnabled(not oauth)
+            self.em_user.setEnabled(not oauth)
+            self.em_pwd.setPlaceholderText("— σύνδεση Microsoft, χωρίς κωδικό —" if oauth else "")
+            if e.get("user"):
+                kind = "Microsoft" if oauth else ("Google" if "gmail" in e.get("host", "") else e.get("host", ""))
+                st = "✅ Ενεργό" if e.get("enabled") else "⏸ Ανενεργό"
+                self.em_stat.setText(f"<b>{st}</b> · {e['user']} · {kind}")
+            else:
+                self.em_stat.setText("<span style='color:#8b96ab'>Πατήστε ένα κουμπί — 1 λεπτό, χωρίς ρυθμίσεις SMTP.</span>")
+
+        def _gmail_login(self):
+            d = QDialog(self)
+            d.setWindowTitle("🔵 Σύνδεση Google (Gmail)")
+            d.setMinimumWidth(520)
+            v = QVBoxLayout(d)
+            v.addWidget(QLabel("<b>3 βήματα:</b><br>1) Γράψτε το Gmail σας.<br>"
+                               "2) Πατήστε <b>🔑 Φτιάξε κωδικό εφαρμογής</b> → όνομα «AirSense» → <b>Create</b>.<br>"
+                               "3) Αντιγράψτε τον κωδικό των 16 γραμμάτων εδώ και πατήστε <b>✔ Σύνδεση</b>.<br>"
+                               "<span style='color:#8b96ab'>Αν δεν βλέπετε τη σελίδα: ενεργοποιήστε πρώτα «Επαλήθευση σε 2 βήματα».</span>"))
+            fl = QFormLayout()
+            u = QLineEdit(self.em_user.text() if "gmail" in self.em_host.text() else "")
+            u.setPlaceholderText("you@gmail.com")
+            pw = QLineEdit()
+            pw.setPlaceholderText("abcd efgh ijkl mnop")
+            to = QLineEdit(self.em_to.text())
+            to.setPlaceholderText("κενό = στο ίδιο email")
+            fl.addRow("Gmail:", u)
+            fl.addRow("", _btn("🔑  Φτιάξε κωδικό εφαρμογής", lambda: QDesktopServices.openUrl(QUrl(GMAIL_APP_PW))))
+            fl.addRow("Κωδικός εφαρμογής:", pw)
+            fl.addRow("Αποστολή σε:", to)
+            v.addLayout(fl)
+            msg = QLabel()
+            msg.setWordWrap(True)
+            v.addWidget(msg)
+            go = _btn("✔  Σύνδεση και έλεγχος", None, True)
+            go.setMinimumHeight(44)
+            v.addWidget(go)
+
+            def run():
+                go.setEnabled(False)
+                msg.setText("⏳ Έλεγχος σύνδεσης…")
+
+                def done(res, err):
+                    go.setEnabled(True)
+                    ok, m = res if res else (False, str(err))
+                    msg.setText(("<b style='color:#22c55e'>" if ok else "<b style='color:#ef4444'>") + m + "</b>")
+                    if ok:
+                        self._mail_ui()
+                        QTimer.singleShot(1200, d.accept)
+                Bg(d, lambda: self.engine.gmail_login(u.text(), pw.text(), to.text()), done)
+            go.clicked.connect(run)
+            d.exec()
+
+        def _ms_login(self):
+            d = QDialog(self)
+            d.setWindowTitle("🟦 Σύνδεση Outlook / Hotmail / Microsoft 365")
+            d.setMinimumWidth(520)
+            v = QVBoxLayout(d)
+            info = QLabel()
+            info.setWordWrap(True)
+            info.setOpenExternalLinks(True)
+            info.setMinimumHeight(72)
+            v.addWidget(info)
+            code = QLabel("…")
+            code.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            code.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            code.setStyleSheet("font-size:26pt;font-weight:800;letter-spacing:4px;padding:6px")
+            code.setMinimumHeight(78)
+            v.addWidget(code)
+            cid = QLineEdit()
+            cid.setPlaceholderText("xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
+            cid.hide()
+            v.addWidget(cid)
+            row = QHBoxLayout()
+            b_open = _btn("📋  Αντιγραφή κωδικού + άνοιγμα σελίδας", None, True)
+            b_open.setMinimumHeight(44)
+            row.addWidget(b_open, 1)
+            v.addLayout(row)
+            st = QLabel()
+            st.setWordWrap(True)
+            v.addWidget(st)
+            state = {"flow": None}
+
+            def open_page():
+                f_ = state["flow"] or {}
+                if f_.get("stage") == "need_id" or not f_:
+                    start(cid.text())
+                    return
+                QApplication.clipboard().setText(f_.get("code", ""))
+                QDesktopServices.openUrl(QUrl(f_.get("url", "https://microsoft.com/devicelogin")))
+                st.setText("📋 Ο κωδικός αντιγράφηκε — επικολλήστε τον (Ctrl+V) στη σελίδα της Microsoft.")
+
+            def show(f_):
+                state["flow"] = f_
+                stg = f_.get("stage")
+                QTimer.singleShot(0, d.adjustSize)
+                if stg == "need_id":
+                    info.setText("<b>Μία φορά μόνο:</b> χρειάζεται το <b>Microsoft App (client) ID</b> του AirSense. "
+                                 f"<a style='color:#3fa7ff' href='{MS_APP_GUIDE}'>Οδηγίες (3 λεπτά)</a>")
+                    code.hide()
+                    cid.show()
+                    b_open.setText("✔  Συνέχεια")
+                    return
+                cid.hide()
+                code.show()
+                if stg == "wait":
+                    info.setText("1) Πατήστε το κουμπί — ανοίγει η σελίδα της Microsoft (μπορείτε και από το κινητό: "
+                                 f"<b>{f_.get('url', '').replace('https://', '')}</b>).<br>"
+                                 "2) Επικολλήστε τον κωδικό → μπείτε στον λογαριασμό σας → <b>Αποδοχή</b>.<br>"
+                                 "3) Αυτό ήταν — εδώ θα δείτε ✔ μόνο του.")
+                    code.setText(f_.get("code", ""))
+                    b_open.setText("📋  Αντιγραφή κωδικού + άνοιγμα σελίδας")
+                elif stg == "ok":
+                    code.setText("✔")
+                    st.setText(f"<b style='color:#22c55e'>{f_.get('msg', '')}</b>")
+                    self._mail_ui()
+                    QTimer.singleShot(1500, d.accept)
+                elif stg == "error":
+                    code.setText("✖")
+                    st.setText(f"<b style='color:#ef4444'>{f_.get('msg', '')}</b>")
+                    b_open.setText("↻  Ξανά")
+                    state["flow"] = None
+
+            def start(c=""):
+                st.setText("⏳ Σύνδεση με Microsoft…")
+
+                def done(res, err):
+                    st.setText("" if res else f"✖ {err}")
+                    if res:
+                        show(res)
+                        if res.get("stage") == "wait":
+                            open_page()
+                Bg(d, lambda: dict(self.engine.ms_login_start(c)), done)
+
+            def tick():
+                f_ = state["flow"]
+                if f_ and f_.get("stage") == "wait":
+                    cur = self.engine.ms_flow or {}
+                    if cur.get("stage") != "wait":
+                        show(dict(cur))
+            tm = QTimer(d)
+            tm.timeout.connect(tick)
+            tm.start(1000)
+            b_open.clicked.connect(open_page)
+            start()
+            d.exec()
+            tm.stop()
+            if (self.engine.ms_flow or {}).get("stage") == "wait":
+                self.engine.ms_flow = {}          # σταματά η αναμονή
+
+        def _mail_logout(self):
+            if QMessageBox.question(self, APP_NAME, "Αποσύνδεση email; (σβήνει κωδικό / σύνδεση)") == QMessageBox.StandardButton.Yes:
+                self.engine.mail_logout()
+                self._mail_ui()
+
         def _preset(self, t):
+            if t.startswith("Outlook"):
+                QTimer.singleShot(0, self._ms_login)
+                return
+            if t == "Gmail":
+                QTimer.singleShot(0, self._gmail_login)
+                return
             m = {"Gmail": ("smtp.gmail.com", 587, "STARTTLS"), "Outlook / Hotmail": ("smtp-mail.outlook.com", 587, "STARTTLS"),
                  "Yahoo": ("smtp.mail.yahoo.com", 465, "SSL")}
             if t in m:
@@ -6172,10 +6618,14 @@ if not HEADLESS:
                 self.engine.cfg["last_report_date"] = datetime.now().strftime("%Y-%m-%d")  # πρώτη αναφορά αύριο
             e.update(enabled=self.em_en.isChecked(), host=self.em_host.text().strip(), port=self.em_port.value(),
                      security=self.em_sec.currentText(), user=self.em_user.text().strip(),
-                     password=enc_secret(self.em_pwd.text()), sender=self.em_from.text().strip(),
+                     sender=self.em_from.text().strip(),
                      to=self.em_to.text().strip(), daily_report=self.em_daily.isChecked(),
                      attach_pdf=self.em_pdf.isChecked(),
                      report_time=self.em_time.time().toString("HH:mm"), alarm_mails=self.al_mail.isChecked())
+            if e.get("auth") != "oauth_ms":
+                e["password"] = enc_secret(self.em_pwd.text())
+            if hasattr(self, "em_stat"):
+                self._mail_ui()
             a.update(enabled=self.al_en.isChecked(), temp_min=self.al_tmin.value(), temp_max=self.al_tmax.value(),
                      hum_min=self.al_hmin.value(), hum_max=self.al_hmax.value(), offline=self.al_off.isChecked(),
                      cooldown_min=self.al_cd.value())

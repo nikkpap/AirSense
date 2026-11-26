@@ -150,6 +150,24 @@ System: `sudo reboot` · `sudo poweroff` (before unplugging) · `sudo airsense-u
 Quick test without a release: `scp AirSense.pyw pico@airsense.local:~/AirSense_v1.6.15.pyw` then `ssh pico@airsense.local "airsense restart"`
 (it installs the highest `APP_VERSION` it finds in the home folder). While testing, `airsense autoupdate off` stops GitHub from replacing it.
 
+## ✉ Email quick login
+
+**AirSense → ⚙ Settings → Email** (or web page → ⚙ admin → ✉ Email): two buttons, no SMTP settings.
+
+- **🔵 Google (Gmail):** type your Gmail → **🔑 Create app password** (name «AirSense» → Create; needs 2-Step Verification)
+  → paste the 16 letters → **✔ Connect**. The connection is tested before it is saved.
+- **🟦 Outlook / Hotmail / Live / Microsoft 365:** Microsoft no longer accepts a password on SMTP (not even an app password),
+  so AirSense signs in with Microsoft: a code appears → open **microsoft.com/devicelogin** (PC or phone) → paste the code →
+  sign in → **Accept**. Done — ✔ appears by itself. Works on the board too (web page), no screen needed.
+- **⏏** = log out (deletes the password / sign-in).
+
+**One time only (developer): Microsoft App ID** — needed for the Outlook button.
+1. [portal.azure.com](https://portal.azure.com) (free Azure account) → **Microsoft Entra ID → App registrations → New registration**.
+2. Name `AirSense` · Supported account types: **Accounts in any organizational directory and personal Microsoft accounts** → Register.
+3. **Authentication → Advanced settings → Allow public client flows = Yes** → Save.
+4. Copy the **Application (client) ID** → paste it once in AirSense (the Outlook button asks for it), or put it in `MS_CLIENT_ID`
+   in `desktop/AirSense.pyw` so every user gets it built in. It is public, not a secret.
+
 ## 🔀 Another network / subnet (e.g. from 192.168.1.x to 10.0.0.x)
 **No new SD card, no reinstall.** Nothing is tied to 192.168.1.x:
 - **Board IP:** taken automatically from the router (DHCP) on any network. With the fixed MAC the new router always gives it the same IP.
@@ -437,6 +455,21 @@ wget -qO get.sh https://raw.githubusercontent.com/nikkpap/AirSense/main/get.sh &
 
 Γρήγορη δοκιμή χωρίς release: `scp AirSense.pyw pico@airsense.local:~/AirSense_v1.6.15.pyw` και `ssh pico@airsense.local "airsense restart"`
 (εγκαθιστά το μεγαλύτερο `APP_VERSION` που βρίσκει στο home). Όσο δοκιμάζεις, `airsense autoupdate off` ώστε να μην το αντικαταστήσει το GitHub.
+
+## ✉ Γρήγορη σύνδεση email
+
+**AirSense → ⚙ Ρυθμίσεις → Email** (ή web σελίδα → ⚙ διαχείριση → ✉ Email): δύο κουμπιά, χωρίς ρυθμίσεις SMTP.
+
+- **🔵 Google (Gmail):** γράψτε το Gmail → **🔑 Φτιάξε κωδικό εφαρμογής** (όνομα «AirSense» → Create· θέλει Επαλήθευση 2 βημάτων)
+  → επικολλήστε τα 16 γράμματα → **✔ Σύνδεση**. Η σύνδεση ελέγχεται πριν αποθηκευτεί.
+- **🟦 Outlook / Hotmail / Live / Microsoft 365:** η Microsoft δεν δέχεται πια κωδικό στο SMTP (ούτε κωδικό εφαρμογής),
+  οπότε το AirSense συνδέεται με λογαριασμό Microsoft: βγαίνει ένας κωδικός → ανοίξτε **microsoft.com/devicelogin** (PC ή κινητό)
+  → επικόλληση κωδικού → είσοδος → **Αποδοχή**. Τέλος — το ✔ εμφανίζεται μόνο του. Δουλεύει και στην πλακέτα (web σελίδα).
+- **⏏** = αποσύνδεση (σβήνει κωδικό / σύνδεση).
+
+**Μία φορά μόνο (developer): Microsoft App ID** — χρειάζεται για το κουμπί Outlook. Βήματα όπως στο αγγλικό τμήμα
+([Email quick login](#-email-quick-login)): portal.azure.com → App registrations → New registration → «personal Microsoft accounts»
+→ Allow public client flows = Yes → αντιγραφή **Application (client) ID** → μία φορά στο AirSense ή στο `MS_CLIENT_ID`.
 
 ## 🔀 Άλλο δίκτυο / subnet (π.χ. από 192.168.1.x σε 10.0.0.x)
 **Ούτε νέα κάρτα, ούτε ξανά εγκατάσταση.** Τίποτα δεν είναι «κλειδωμένο» στο 192.168.1.x:
