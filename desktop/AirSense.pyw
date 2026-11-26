@@ -15,7 +15,7 @@ Developer : Nikolaos K. Paridis (aka nikkpap) — ALU DEV TEAM
 APP_NAME = "AirSense"
 OLD_APP_NAMES = ("ALU HygroLink", "ALU AirSense")   # παλιά ονόματα (μεταφορά δεδομένων/ρυθμίσεων)
 OLD_APP_NAME = OLD_APP_NAMES[0]
-APP_VERSION = "1.6.19"
+APP_VERSION = "1.6.20"
 AUTHOR = "Nikolaos K. Paridis (aka nikkpap)"
 TEAM = "ALU DEV TEAM"
 
@@ -2295,9 +2295,68 @@ class Engine:
                 self._daily_tasks()
             except Exception as e:
                 self.log(f"Σφάλμα εργασιών: {e}", "err")
+            try:
+                self._guide_watch()
+            except Exception as e:
+                self.log(f"Οδηγός κινητού PDF: {e}", "warn")
             secs = max(2, int(self.cfg.get("poll_seconds", 60)))
             self.wake_ev.wait(secs)
             self.wake_ev.clear()
+
+    # ── 📄 phone guide PDF: made again by itself whenever the server's addresses change (new WiFi / place / Tailscale) ──
+    GUIDE_NAME = "AirSense_Phone_Setup_GR_EN.pdf"
+
+    def guide_paths(self):
+        paths = [os.path.join(EXPORT_DIR, self.GUIDE_NAME)]
+        try:                                       # board: also in the user's home folder (scp / AirSense Remote)
+            u = open("/var/lib/airsense/user").read().strip() if os.path.exists("/var/lib/airsense/user") else ""
+            if u:
+                import pwd
+                home = pwd.getpwnam(u).pw_dir
+                if os.path.isdir(home):
+                    paths.append(os.path.join(home, self.GUIDE_NAME))
+        except Exception:
+            pass
+        return paths
+
+    def _guide_watch(self, force=False):
+        now = time.time()
+        if not force and now - getattr(self, "_guide_checked", 0) < 60:
+            return
+        self._guide_checked = now
+        urls = [(l, u) for l, u in self.server_urls() if "127.0.0.1" not in u]
+        if not urls:
+            return
+        sig = json.dumps([u for _l, u in urls] + [bool(self.cfg["server"].get("pin"))], sort_keys=True)
+        main = self.guide_paths()[0]
+        if not force and sig == self.cfg.get("guide_sig") and os.path.exists(main):
+            return
+        try:
+            data = build_setup_pdf(urls, bool(self.cfg["server"].get("pin")), APP_VERSION)
+        except Exception as e:
+            if sig != getattr(self, "_guide_err_sig", None):
+                self._guide_err_sig = sig
+                self.log(f"Οδηγός κινητού PDF: δεν έγινε ({e})", "warn")
+            return
+        saved = []
+        for fn in self.guide_paths():
+            try:
+                os.makedirs(os.path.dirname(fn), exist_ok=True)
+                with open(fn, "wb") as f:
+                    f.write(data)
+                if fn.startswith("/home/") and os.path.exists("/var/lib/airsense/user"):
+                    import pwd
+                    pw = pwd.getpwnam(open("/var/lib/airsense/user").read().strip())
+                    os.chown(fn, pw.pw_uid, pw.pw_gid)
+                saved.append(fn)
+            except Exception:
+                pass
+        first = "guide_sig" not in self.cfg
+        self.cfg["guide_sig"] = sig
+        self.save_cfg()
+        self.guide_ready = (now, saved[0] if saved else "")
+        self.log(("📄 Οδηγός κινητού PDF έτοιμος: " if first else "📄 Νέο δίκτυο → νέος οδηγός κινητού PDF: ")
+                 + " · ".join(saved) + " — " + ", ".join(u for _l, u in urls), "info")
 
     def calib(self, did):
         c = (self.cfg.get("calib") or {}).get(did) or {}
@@ -5787,10 +5846,12 @@ if not HEADLESS:
             lay.addLayout(row, 1)
             gr = QHBoxLayout()
             gl = QLabel("<b>📄 Οδηγός κινητού σε PDF</b> (ελληνικά + English) — με τα QR και τις διευθύνσεις αυτού του server. "
-                        "Τον εκτυπώνεις ή τον στέλνεις σε όποιον θέλει να συνδεθεί.")
+                        "<b>Φτιάχνεται μόνος του</b> κάθε φορά που αλλάζει το δίκτυο (νέο WiFi / μέρος) και είναι πάντα έτοιμος στον φάκελο "
+                        "<i>exports</i>. Τον εκτυπώνεις ή τον στέλνεις σε όποιον θέλει να συνδεθεί.")
             gl.setWordWrap(True)
             gr.addWidget(gl, 1)
             gr.addWidget(_btn("📄 PDF οδηγός κινητού", self._phone_guide_pdf, True))
+            gr.addWidget(_btn("📂", lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(EXPORT_DIR))))
             lay.addLayout(gr)
             g = QGroupBox("⚙ Server")
             h = QHBoxLayout(g)
@@ -5822,13 +5883,12 @@ if not HEADLESS:
 
         def _phone_guide_pdf(self):
             try:
-                data = build_setup_pdf(self.engine.server_urls(force=True), bool(self.engine.cfg["server"].get("pin")), APP_VERSION)
-                os.makedirs(EXPORT_DIR, exist_ok=True)
-                fn = os.path.join(EXPORT_DIR, "AirSense_Phone_Setup_GR_EN.pdf")
-                with open(fn, "wb") as f:
-                    f.write(data)
+                self.engine.server_urls(force=True)
+                self.engine._guide_watch(force=True)          # fresh, with the addresses of right now
+                fn = self.engine.guide_paths()[0]
+                if not os.path.exists(fn):
+                    raise RuntimeError("δεν βρέθηκε διεύθυνση δικτύου (είναι ο υπολογιστής σε WiFi/LAN;)")
                 QDesktopServices.openUrl(QUrl.fromLocalFile(fn))
-                self.engine.log(f"Οδηγός κινητού PDF: {fn}")
             except Exception as e:
                 QMessageBox.warning(self, APP_NAME, f"Δεν έγινε το PDF:\n{e}")
 
@@ -6379,6 +6439,9 @@ if not HEADLESS:
                 self._last_ev = ts
                 if lvl == "warn" and self.tray and not self.isVisible():
                     self.tray.showMessage(APP_NAME, msg, QSystemTrayIcon.MessageIcon.Warning, 6000)
+                elif msg.startswith("📄 Νέο δίκτυο") and self.tray:
+                    self.tray.showMessage(APP_NAME, "📄 Νέο δίκτυο — ο οδηγός κινητού PDF ενημερώθηκε (καρτέλα 📱 Κινητό)",
+                                          QSystemTrayIcon.MessageIcon.Information, 6000)
 
         # ── Οδηγός ──
         def _tab_help(self):

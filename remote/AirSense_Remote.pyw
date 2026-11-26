@@ -14,7 +14,7 @@ Double-click: installs what it needs (PyQt6, paramiko, qrcode) by itself.
 Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM
 """
 APP_NAME = "AirSense Remote"
-APP_VERSION = "1.3.0"
+APP_VERSION = "1.3.1"
 
 import os
 import sys
@@ -1048,6 +1048,8 @@ class Main(QMainWindow):
             save_cfg(self.cfg)
             self._update_qr()
             self._term_sys("ℹ Settings updated by themselves: " + " · ".join(changed))
+            # new network → fresh phone guide PDF in Downloads, ready to send
+            QTimer.singleShot(2000, lambda: self.phone_guide(open_it=False))
 
     def _set_connected_ui(self, on):
         self.btn_conn.setText("⏏ Disconnect" if on else "🔌 Connect")
@@ -1238,7 +1240,7 @@ class Main(QMainWindow):
             self.led["health"].set("ok", "airsense status: all good")
 
     # ── 📄 phone guide PDF (made by the board's server) ──
-    def phone_guide(self):
+    def phone_guide(self, open_it=True):
         h = self.web_host()
         url = f"http://{h}:{self.cfg.get('web_port', 8765)}/setup.pdf"
         self._term_sys(f"📄 Phone guide ← {url}")
@@ -1256,7 +1258,8 @@ class Main(QMainWindow):
                 with open(fn, "wb") as f:
                     f.write(data)
                 self.bus.term.emit(f"\x1b[32m✔ Saved: {fn}\x1b[0m")
-                self.bus.open_file.emit(fn)
+                if open_it:
+                    self.bus.open_file.emit(fn)
             except urllib.error.HTTPError as e:
                 self.bus.term.emit(f"\x1b[31m✖ HTTP {e.code} — old AirSense on the board? Press ⬇ Update first\x1b[0m")
             except Exception as e:
