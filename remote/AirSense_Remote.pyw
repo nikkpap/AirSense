@@ -14,7 +14,7 @@ Double-click: installs what it needs (PyQt6, paramiko, qrcode) by itself.
 Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM
 """
 APP_NAME = "AirSense Remote"
-APP_VERSION = "1.0.1"
+APP_VERSION = "1.1.0"
 
 import os
 import sys
@@ -28,6 +28,8 @@ import subprocess
 import importlib.util
 import urllib.request
 import urllib.error
+import ipaddress
+from concurrent.futures import ThreadPoolExecutor
 
 REQUIRED = [("PyQt6", "PyQt6"), ("paramiko", "paramiko"), ("qrcode", "qrcode")]
 
@@ -94,7 +96,7 @@ CFG_PATH = os.path.join(CFG_DIR, "config.json")
 DEFAULT_CFG = {
     "lan": "192.168.1.29", "mdns": "airsense.local", "tailscale": "100.104.13.118",
     "route": "auto", "user": "pico", "password": "", "port": 22, "web_port": 8765, "pin": "",
-    "auto_connect": True, "save_password": True, "geometry": "",
+    "auto_connect": True, "save_password": True, "geometry": "", "auto_find": True,
 }
 
 
@@ -232,6 +234,59 @@ def last_cr(s):
     return s.split("\r")[-1] if "\r" in s else s
 
 
+# ═════════════════════════ BleBox search from this PC ═════════════════════════
+SENSOR_TYPES = {"humiditysensor", "multisensor", "tempsensor"}
+
+
+def pc_networks():
+    """The /24 networks of this PC (WiFi / Ethernet), without loopback / link-local / Tailscale."""
+    ips = set()
+    try:
+        for fam, *_rest, addr in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            ips.add(addr[0])
+    except Exception:
+        pass
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("192.0.2.1", 80))
+        ips.add(s.getsockname()[0])
+        s.close()
+    except Exception:
+        pass
+    nets = []
+    for ip in ips:
+        try:
+            a = ipaddress.ip_address(ip)
+        except ValueError:
+            continue
+        if a.is_loopback or a.is_link_local or a in ipaddress.ip_network("100.64.0.0/10"):
+            continue
+        n = ipaddress.ip_network(f"{ip}/24", strict=False)
+        if n not in nets:
+            nets.append(n)
+    return nets
+
+
+def blebox_sensor(ip, timeout=2.0):
+    """BleBox sensor at this IP? → dict(device) or None"""
+    try:
+        with socket.create_connection((ip, 80), timeout=0.5):
+            pass
+    except Exception:
+        return None
+    for path in ("/info", "/api/device/state"):
+        try:
+            req = urllib.request.Request(f"http://{ip}{path}", headers={"User-Agent": APP_NAME})
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                js = json.loads(r.read().decode("utf-8", "replace"))
+            dev = js.get("device") if isinstance(js, dict) else None
+            if isinstance(dev, dict) and str(dev.get("type", "")).lower() in SENSOR_TYPES:
+                return dev
+        except Exception:
+            continue
+    return None
+
+
 # ═════════════════════════ SSH ═════════════════════════
 class SSHConn:
     """paramiko Transport with auth: none (Tailscale SSH) → password → keyboard-interactive → keys."""
@@ -343,6 +398,7 @@ class Bus(QObject):
     leds = pyqtSignal(dict)
     status = pyqtSignal(str)
     sensors = pyqtSignal(object)
+    find_done = pyqtSignal(str, str)     # result: found / added / none / error, message
 
 
 # ═════════════════════════ UI pieces ═════════════════════════
@@ -524,7 +580,8 @@ COMMANDS = [
     ("Server", "🔄 Auto-update", "airsense autoupdate", "run", "Automatic update state"),
     ("Server", "🌍 Tailscale", "airsense tailscale", "run", "Tailscale connect / login link"),
     ("Server", "🔐 Admin password", "airsense set-admin", "run", "Admin password (interactive — answer below)"),
-    ("Sensors", "🔍 Scan", "airsense scan", "run", "Find + add BleBox sensors on the network"),
+    ("Sensors", "🔎 Find sensor", "", "find", "Automatic check: board scan → PC scan → add → tell me what is wrong"),
+    ("Sensors", "🔍 Scan", "airsense scan", "run", "Find + add BleBox sensors on the network (board only)"),
     ("Sensors", "＋ Add by IP", "airsense add {ip}", "ask:Sensor IP (e.g. 192.168.1.253)", "Add a sensor by IP"),
     ("Sensors", "📟 Set PIN", "airsense set-pin {pin}", "ask:New PIN for the web page (empty = no PIN)", "PIN of the web page"),
     ("Sensors", "🌤 City", "airsense city {city}", "ask:City / village for the weather", "Weather location"),
@@ -558,6 +615,10 @@ class Main(QMainWindow):
         self.bus.leds.connect(self._on_leds)
         self.bus.status.connect(self._on_status)
         self.bus.sensors.connect(self._on_sensors)
+        self.bus.find_done.connect(self._find_done)
+        self._finding = False
+        self._sensor_bad = 0
+        self._last_autofind = 0.0
         self.led_timer = QTimer(self)
         self.led_timer.timeout.connect(self.refresh_leds)
         self.led_timer.start(15000)
@@ -626,7 +687,23 @@ class Main(QMainWindow):
         ov = QWidget()
         ol = QVBoxLayout(ov)
         ol.setContentsMargins(0, 6, 0, 0)
-        sc, sl = card("🌡 Sensors (live)")
+        sc, sl = card()
+        sh = QHBoxLayout()
+        h = QLabel("🌡 Sensors (live)")
+        h.setObjectName("h2")
+        sh.addWidget(h)
+        sh.addStretch()
+        self.chk_autofind = QCheckBox("auto")
+        self.chk_autofind.setToolTip("When the sensor stays offline, look for it by itself (at most every 10 minutes)")
+        self.chk_autofind.setChecked(bool(self.cfg.get("auto_find", True)))
+        self.chk_autofind.toggled.connect(self._autofind_toggled)
+        sh.addWidget(self.chk_autofind)
+        self.btn_find = QPushButton("🔎 Find sensor")
+        self.btn_find.setObjectName("pri")
+        self.btn_find.setToolTip("Automatic check: board scan → PC scan → add → tell me what is wrong")
+        self.btn_find.clicked.connect(lambda: self.find_sensor(quiet=False))
+        sh.addWidget(self.btn_find)
+        sl.addLayout(sh)
         self.sens_box = QVBoxLayout()
         self.sens_empty = QLabel("—")
         self.sens_empty.setObjectName("muted")
@@ -872,6 +949,8 @@ class Main(QMainWindow):
         self.btn_conn.setText("⏏ Disconnect" if on else "🔌 Connect")
         for b in self.cmd_buttons:
             b.setEnabled(on)
+        if hasattr(self, "btn_find"):
+            self.btn_find.setEnabled(on and not getattr(self, "_finding", False))
 
     def open_settings(self):
         d = SettingsDialog(self, self.cfg)
@@ -938,6 +1017,13 @@ class Main(QMainWindow):
                 continue
             self.led[k].set(s, tip)
         self.led_time.setText("checked " + time.strftime("%H:%M:%S"))
+        st = res.get("sensor", ("off", ""))[0]
+        self._sensor_bad = self._sensor_bad + 1 if st in ("bad", "warn") else 0
+        if (self.chk_autofind.isChecked() and self._sensor_bad >= 2 and not self._finding and self.chan is None
+                and self.conn and self.conn.alive and time.time() - self._last_autofind > 600):
+            self._last_autofind = time.time()
+            self._term_sys("🔎 The sensor is offline — looking for it by itself (auto)…")
+            self.find_sensor(quiet=True)
 
     # ── sensors ──
     def _on_sensors(self, devs):
@@ -1031,10 +1117,106 @@ class Main(QMainWindow):
             self.st_sum.setText("<span style='color:#2ecc71'>✔ All good</span>")
             self.led["health"].set("ok", "airsense status: all good")
 
+    # ── 🔎 find the sensor automatically ──
+    def _autofind_toggled(self, on):
+        self.cfg["auto_find"] = bool(on)
+        save_cfg(self.cfg)
+
+    def find_sensor(self, quiet=False):
+        if not (self.conn and self.conn.alive):
+            self._term_sys("Not connected — 🔌 Connect first", err=True)
+            return
+        if self._finding:
+            return
+        if self.chan is not None:
+            self._term_sys("A command is still running — ■ Stop first", err=True)
+            return
+        self._finding = True
+        self._find_quiet = quiet
+        self.btn_find.setEnabled(False)
+        self.btn_find.setText("🔎 Searching…")
+        self.busy_lbl.setText("⏳ looking for the sensor…")
+        conn = self.conn
+
+        def say(t, err=False):
+            self.bus.term.emit(("\x1b[31m" if err else "\x1b[36m") + t + "\x1b[0m")
+
+        def job():
+            try:
+                say("── 🔎 Find sensor ── step 1/3: the board scans its network …")
+                rc, out = conn.run("airsense scan", timeout=240)
+                lines = [strip_ansi(last_cr(l)).rstrip() for l in out.splitlines()]
+                for l in lines:
+                    if l.strip() and "password for" not in l and not re.match(r"^\s*\d+/\d+ ·", l.strip()):
+                        self.bus.term.emit("   " + l)
+                m = re.search(r"Βρέθηκαν (\d+) αισθητήρες", out)
+                if m and int(m.group(1)) > 0:
+                    self.bus.find_done.emit("found", f"✔ The board found {m.group(1)} sensor(s) — they are on the board now")
+                    return
+                say("step 2/3: the board sees none → this PC scans its own networks …")
+                nets = pc_networks()
+                hosts = [str(h) for n in nets for h in n.hosts()]
+                say("   " + (", ".join(str(n) for n in nets) or "no network on this PC") + f" ({len(hosts)} addresses)")
+                found = []
+                with ThreadPoolExecutor(max_workers=64) as ex:
+                    for ip, dev in zip(hosts, ex.map(blebox_sensor, hosts)):
+                        if dev:
+                            found.append((ip, dev))
+                            say(f"   ＋ {dev.get('deviceName') or dev.get('type')}  {ip}  [{dev.get('type')}]")
+                if not found:
+                    self.bus.find_done.emit("none", "")
+                    return
+                say(f"step 3/3: adding {len(found)} sensor(s) to the board …")
+                ok = 0
+                for ip, dev in found:
+                    rc, out = conn.run(f"airsense add {ip}", timeout=90)
+                    txt = strip_ansi(out).strip().splitlines()
+                    self.bus.term.emit("   " + (txt[-1] if txt else f"exit {rc}"))
+                    ok += rc == 0
+                self.bus.find_done.emit("added", f"✔ Added from this PC: {', '.join(ip for ip, _ in found)}"
+                                        + ("" if ok == len(found) else " (some failed — see above)"))
+            except Exception as e:
+                self.bus.find_done.emit("error", str(e))
+        threading.Thread(target=job, daemon=True).start()
+
+    def _find_done(self, result, msg):
+        self._finding = False
+        self.btn_find.setText("🔎 Find sensor")
+        self.btn_find.setEnabled(bool(self.conn and self.conn.alive))
+        self.busy_lbl.setText("")
+        if result in ("found", "added"):
+            self._append_html(f"<span style='color:#2ecc71;font-weight:700'>{msg}</span>")
+            self._sensor_bad = 0
+            QTimer.singleShot(3000, self.refresh_leds)
+            QTimer.singleShot(4000, lambda: self.refresh_status(quiet=True))
+            return
+        if result == "error":
+            self._term_sys("✖ Find sensor: " + msg, err=True)
+            return
+        self._term_sys("✖ No BleBox sensor answers — neither from the board nor from this PC.", err=True)
+        help_txt = ("<b>The sensor is most likely not on this WiFi</b> (new place, new WiFi or new password).<br><br>"
+                    "<b>1.</b> Sensor on power, wait 1 minute.<br>"
+                    "<b>2.</b> On this PC open <b>AirSense</b> → 📡 Sensors → <b>🧙 New sensor (WiFi setup)</b> "
+                    "→ the green <i>humiditySensor-…</i> network → give it the WiFi here (<b>2.4 GHz</b>).<br>"
+                    "&nbsp;&nbsp;&nbsp;&nbsp;Or on the phone: WiFi <i>humiditySensor-…</i> → <b>wBox</b> app → WiFi settings.<br>"
+                    "<b>3.</b> Back here → <b>🔎 Find sensor</b> again (or leave <b>auto</b> ticked — it looks every 10 minutes).<br><br>"
+                    "<span style='color:#7d8799'>Still nothing? The WiFi may keep its devices apart (client isolation / guest WiFi) "
+                    "or put them on another network than the board's cable.</span>")
+        self._append_html(f"<span style='color:#f5b942'>{help_txt}</span>")
+        if not getattr(self, "_find_quiet", False):
+            box = QMessageBox(self)
+            box.setWindowTitle("🔎 Find sensor")
+            box.setTextFormat(Qt.TextFormat.RichText)
+            box.setText(help_txt)
+            box.exec()
+
     # ── commands ──
     def preset(self, cmd, kind, label):
         if not (self.conn and self.conn.alive):
             self._term_sys("Not connected — 🔌 Connect first", err=True)
+            return
+        if kind == "find":
+            self.find_sensor(quiet=False)
             return
         if kind == "confirm":
             if QMessageBox.question(self, APP_NAME, f"{label}\n\n$ {cmd}\n\nAre you sure?") != QMessageBox.StandardButton.Yes:

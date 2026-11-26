@@ -92,6 +92,7 @@ By hand: Settings → **Updates** → «🔄 Check for updates». The first time
 `AirSense_Remote_vX.pyw` → double-click (installs PyQt6, paramiko, qrcode by itself) → **⚙ Settings**: local IP, Tailscale IP, user, password, PIN.
 - **LEDs:** Board · SSH · Web :8765 · Sensors · Tailscale · Health — green / orange / red, checked every 15 s (hover = details).
 - **Route:** Auto tries LAN → airsense.local → Tailscale and keeps the one that works (home or office, same program).
+- **🔎 Find sensor** (+ *auto*): board scan → PC scan → adds it to the board → or tells you what to do (sensor on a new WiFi).
 - **Board status** = `airsense status` as a tree with ✔ / ⚠ / ✖ · **live sensor values** · **QR** codes for the phone.
 - **One-click commands:** Status, Logs, Live log, Clock, MAC, Restart, Stop, Update, Auto-update, Tailscale, Admin password,
   Scan, Add by IP, Set PIN, City, Time zone, Disk/RAM, CPU temp, Password, Reboot, Power off (dangerous ones ask first).
@@ -368,6 +369,7 @@ wget -qO get.sh https://raw.githubusercontent.com/nikkpap/AirSense/main/get.sh &
 `AirSense_Remote_vX.pyw` → διπλό κλικ (εγκαθιστά μόνο του PyQt6, paramiko, qrcode) → **⚙ Settings**: τοπική IP, Tailscale IP, χρήστης, κωδικός, PIN.
 - **LED:** Πλακέτα · SSH · Web :8765 · Αισθητήρες · Tailscale · Υγεία — πράσινο / πορτοκαλί / κόκκινο, έλεγχος κάθε 15″ (ποντίκι από πάνω = λεπτομέρειες).
 - **Route:** το Auto δοκιμάζει LAN → airsense.local → Tailscale και κρατά όποιο δουλεύει (σπίτι ή γραφείο, ίδιο πρόγραμμα).
+- **🔎 Find sensor** (+ *auto*): σάρωση από την πλακέτα → σάρωση από το PC → προσθήκη στην πλακέτα → ή σου λέει τι να κάνεις (αισθητήρας σε νέο WiFi).
 - **Κατάσταση πλακέτας** = `airsense status` σε δέντρο με ✔ / ⚠ / ✖ · **ζωντανές τιμές αισθητήρων** · **QR** για το κινητό.
 - **Εντολές με ένα κλικ:** Status, Logs, Live log, Clock, MAC, Restart, Stop, Update, Auto-update, Tailscale, Admin password,
   Scan, Add by IP, Set PIN, City, Time zone, Disk/RAM, CPU temp, Password, Reboot, Power off (τα επικίνδυνα ρωτούν πρώτα).
