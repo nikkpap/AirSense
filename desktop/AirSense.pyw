@@ -15,7 +15,7 @@ Developer : Nikolaos K. Paridis (aka nikkpap) — ALU DEV TEAM
 APP_NAME = "AirSense"
 OLD_APP_NAMES = ("ALU HygroLink", "ALU AirSense")   # παλιά ονόματα (μεταφορά δεδομένων/ρυθμίσεων)
 OLD_APP_NAME = OLD_APP_NAMES[0]
-APP_VERSION = "1.6.22"
+APP_VERSION = "1.6.23"
 AUTHOR = "Nikolaos K. Paridis (aka nikkpap)"
 TEAM = "ALU DEV TEAM"
 
@@ -3039,6 +3039,12 @@ header h1{font-size:17px;margin:0;flex:1}.dot{width:10px;height:10px;border-radi
 main{padding:14px;max-width:1100px;margin:auto}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px}
+#askBg{position:fixed;inset:0;background:#000a;backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:99;padding:16px}
+#askBox{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:22px;width:100%;max-width:360px;text-align:center;box-shadow:0 20px 60px #0008}
+#askBox h3{margin:6px 0 4px;font-size:19px}#askBox .ic{font-size:38px}#askBox p{color:var(--mut);margin:0 0 14px;font-size:14px}
+#askIn{width:100%;box-sizing:border-box;font:inherit;font-size:24px;text-align:center;letter-spacing:6px;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--txt)}
+#askIn:focus{outline:none;border-color:#2b6cff}#askErr{color:var(--bad);min-height:20px;font-size:14px;margin:8px 0}
+#askBox .bt{display:flex;gap:8px}#askBox .bt button{flex:1;padding:12px;font-size:16px}#askBox label{color:var(--mut);font-size:13px}
 .dev{cursor:pointer}.dev.sel{border-color:#2b6cff}
 .nm{font-weight:600;display:flex;justify-content:space-between;gap:8px;align-items:center}
 .vals{display:flex;gap:22px;margin:12px 0 8px}
@@ -3152,8 +3158,22 @@ let PIN=localStorage.getItem('hl_pin')||'',S=null,cur=localStorage.getItem('hl_d
 const RANGES=[[1,'1ώ'],[6,'6ώ'],[24,'24ώ'],[168,'7 ημ'],[720,'30 ημ']];
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-async function api(path,opt={}){opt.headers=Object.assign({'X-PIN':PIN},opt.headers||{});const r=await fetch(path,opt);
- if(r.status==401){const p=prompt('PIN πρόσβασης:');if(p===null)throw new Error('auth');PIN=p;localStorage.setItem('hl_pin',p);return api(path,opt);}
+function ask(o){return new Promise(res=>{let bg=$('askBg');if(!bg){bg=document.createElement('div');bg.id='askBg';
+ bg.innerHTML='<div id="askBox"><div class="ic" id="askIc"></div><h3 id="askT"></h3><p id="askP"></p><input id="askIn" autocomplete="off"><div id="askErr"></div>'+
+ '<div class="bt"><button id="askNo">Άκυρο</button><button class="pri" id="askOk">OK</button></div></div>';document.body.appendChild(bg);}
+ $('askIc').textContent=o.icon||'🔒';$('askT').textContent=o.title||'';$('askP').textContent=o.text||'';$('askErr').textContent=o.err||'';
+ const i=$('askIn');i.value='';i.type=o.pw?'password':'text';i.inputMode=o.num?'numeric':'text';i.placeholder=o.ph||'';
+ i.style.letterSpacing=o.num?'6px':'1px';$('askOk').textContent=o.ok||'OK';bg.style.display='flex';setTimeout(()=>i.focus(),50);
+ const done=v=>{bg.style.display='none';i.onkeydown=null;res(v);};
+ $('askOk').onclick=()=>done(i.value);$('askNo').onclick=()=>done(null);
+ i.onkeydown=e=>{if(e.key==='Enter')done(i.value);if(e.key==='Escape')done(null);};});}
+let PINQ=null;
+async function api(path,opt={}){opt.headers=Object.assign({},opt.headers||{},{'X-PIN':PIN});const r=await fetch(path,opt);
+ if(r.status==401){const was=opt.headers['X-PIN'];
+  if(was!==PIN)return api(path,opt);                         // another request already got the new PIN
+  if(!PINQ)PINQ=ask({icon:'🔒',title:'AirSense',text:'Γράψτε το PIN πρόσβασης',num:true,pw:true,ph:'• • • •',ok:'Είσοδος',
+   err:was?'✖ Λάθος PIN — δοκιμάστε ξανά':''}).then(p=>{PINQ=null;if(p!==null){PIN=p.trim();localStorage.setItem('hl_pin',PIN);}return p;});
+  const p=await PINQ;if(p===null)throw new Error('auth');return api(path,opt);}
  return r.json();}
 function toast(m){const t=$('toast');t.textContent=m;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',3500);}
 const f=(v,d=1)=>v==null?'—':(+v).toFixed(d);
@@ -3241,10 +3261,10 @@ let ADM='';
 async function post(path,obj){const j=await api(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(obj)});toast(j.msg||(j.ok?'OK':'Σφάλμα'));return j;}
 async function admOpen(){
  let st=await api('/api/admin/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({admin:ADM})});
- if(!st.ok&&st.admin_set===false){const a=prompt('Ορίστε νέο κωδικό διαχειριστή (4+ χαρακτήρες):');if(!a)return;
-  const b=prompt('Επανάληψη κωδικού:');if(a!==b){toast('Δεν ταιριάζουν');return;}
+ if(!st.ok&&st.admin_set===false){const a=await ask({icon:'🔐',title:'Νέος κωδικός διαχειριστή',text:'Τουλάχιστον 4 χαρακτήρες',pw:true});if(!a)return;
+  const b=await ask({icon:'🔐',title:'Επανάληψη κωδικού',text:'Γράψτε τον ξανά',pw:true});if(a!==b){toast('Δεν ταιριάζουν');return;}
   const j=await post('/api/admin/init',{new:a});if(!j.ok)return;ADM=a;}
- else if(!st.ok){const a=prompt('Κωδικός διαχειριστή:');if(a===null)return;ADM=a;}
+ else if(!st.ok){const a=await ask({icon:'🔐',title:'Διαχείριση',text:'Κωδικός διαχειριστή',pw:true,ok:'Είσοδος',err:ADM?'✖ Λάθος κωδικός':''});if(a===null)return;ADM=a;return admOpen();}
  await admLoad();}
 async function admLoad(){
  const st=await api('/api/admin/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({admin:ADM})});
