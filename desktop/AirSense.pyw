@@ -15,7 +15,7 @@ Developer : Nikolaos K. Paridis (aka nikkpap) — ALU DEV TEAM
 APP_NAME = "AirSense"
 OLD_APP_NAMES = ("ALU HygroLink", "ALU AirSense")   # παλιά ονόματα (μεταφορά δεδομένων/ρυθμίσεων)
 OLD_APP_NAME = OLD_APP_NAMES[0]
-APP_VERSION = "1.7.3"
+APP_VERSION = "1.7.4"
 AUTHOR = "Nikolaos K. Paridis (aka nikkpap)"
 TEAM = "ALU DEV TEAM"
 
@@ -2792,6 +2792,73 @@ class Engine:
         self.ms_flow = {}
         self.log("✉ Αποσύνδεση email")
 
+    def push_mail_to_board(self, base, admin, pin="", test=True):
+        """📤 Αντιγράφει τις ρυθμίσεις email + όρια ειδοποιήσεων του PC στην πλακέτα (μέσω της web διαχείρισης)."""
+        base = base.strip().rstrip("/")
+        if not base.startswith("http"):
+            base = "http://" + base
+        if base.count(":") < 2:
+            base += ":8765"
+
+        def call(path, body):
+            req = urllib.request.Request(base + path, data=json.dumps(body).encode(), method="POST",
+                                         headers={"Content-Type": "application/json", "X-PIN": pin or "",
+                                                  "User-Agent": f"{APP_NAME}/{APP_VERSION}"})
+            try:
+                with urllib.request.urlopen(req, timeout=30) as r:
+                    return json.loads(r.read().decode("utf-8") or "{}")
+            except urllib.error.HTTPError as ex:
+                if ex.code == 401:
+                    raise RuntimeError("Λάθος PIN της πλακέτας")
+                try:
+                    return json.loads(ex.read().decode("utf-8") or "{}") | {"_code": ex.code}
+                except Exception:
+                    return {"ok": False, "msg": f"HTTP {ex.code}", "_code": ex.code}
+            except Exception as ex:
+                raise RuntimeError(f"Η πλακέτα δεν απαντά στο {base} ({ex})")
+
+        e = self.cfg["email"]
+        if not e.get("user"):
+            return False, "Ρυθμίστε πρώτα το email εδώ (🔵 Google / 🟦 Outlook)"
+        if len(admin) < 4:
+            return False, "Κωδικός διαχειριστή πλακέτας: τουλάχιστον 4 χαρακτήρες"
+        steps = []
+        chk = call("/api/admin/check", {"admin": admin})
+        if not chk.get("ok"):
+            if chk.get("set") is False:                           # πρώτη φορά: ορίζει αυτόν τον κωδικό στην πλακέτα
+                r = call("/api/admin/init", {"new": admin})
+                if not r.get("ok"):
+                    return False, r.get("msg", "Δεν ορίστηκε κωδικός διαχειριστή")
+                steps.append("🔐 ορίστηκε κωδικός διαχειριστή στην πλακέτα")
+            else:
+                return False, "Λάθος κωδικός διαχειριστή της πλακέτας"
+        oauth = e.get("auth") == "oauth_ms"
+        body = {k: e.get(k) for k in ("enabled", "host", "port", "security", "user", "sender", "to", "daily_report",
+                                      "report_time", "alarm_mails", "attach_pdf")}
+        body.update(admin=admin, enabled=True, auth="oauth_ms" if oauth else "password")
+        if oauth:
+            body.update(oauth_refresh=dec_secret(e.get("oauth_refresh", "")), ms_client_id=ms_client_id(e))
+        else:
+            body["password"] = dec_secret(e.get("password", ""))
+        r = call("/api/admin/email", body)
+        if not r.get("ok"):
+            return False, r.get("msg", "Η πλακέτα δεν δέχτηκε τις ρυθμίσεις")
+        if oauth:
+            st = call("/api/admin/state", {"admin": admin})
+            if (st.get("email") or {}).get("auth") != "oauth_ms":
+                return False, ("Η πλακέτα έχει παλιό AirSense και δεν ξέρει τη σύνδεση Microsoft → "
+                               "κάντε πρώτα «airsense update» (ή ⬇ Update στην καρτέλα 🛰 Πλακέτα)")
+        steps.append(f"✉ email: {e.get('user')} → {mail_join(e.get('to', '')) or e.get('user')}")
+        a = self.cfg["alarms"]
+        r = call("/api/admin/alarms", dict(a, admin=admin))
+        steps.append("🔔 όρια ειδοποιήσεων" if r.get("ok") else "⚠ όρια: χρειάζεται «airsense update» στην πλακέτα")
+        if test:
+            r = call("/api/admin/email/test", {"admin": admin})
+            steps.append(("✔ δοκιμαστικό email στάλθηκε από την πλακέτα" if r.get("ok") else
+                          f"✖ δοκιμαστικό: {r.get('msg', '')}"))
+        self.log("📤 Ρυθμίσεις email → πλακέτα " + base)
+        return True, "\n".join(["Στάλθηκαν στην πλακέτα " + base + ":"] + ["• " + x for x in steps])
+
     def send_test(self):
         try:
             send_mail(self.cfg["email"], f"[{APP_NAME}] Δοκιμαστικό email",
@@ -3510,16 +3577,39 @@ def make_handler(engine):
                                 e["to"] = mail_join(e["to"])
                             if body.get("enabled") and not e.get("enabled"):
                                 engine.cfg["last_report_date"] = datetime.now().strftime("%Y-%m-%d")  # πρώτη αναφορά αύριο
-                            for k in ("enabled", "daily_report", "alarm_mails"):
+                            for k in ("enabled", "daily_report", "alarm_mails", "attach_pdf"):
                                 if k in body:
                                     e[k] = bool(body[k])
                             if body.get("port"):
                                 e["port"] = int(body["port"])
                             if body.get("password"):
                                 e["password"] = enc_secret(str(body["password"]))
+                            if body.get("auth") in ("password", "oauth_ms"):          # από το PC (📤 Στείλε στην πλακέτα)
+                                e["auth"] = body["auth"]
+                                if body["auth"] == "oauth_ms" and body.get("oauth_refresh"):
+                                    e["oauth_refresh"] = enc_secret(str(body["oauth_refresh"]))
+                                    e["password"] = ""
+                                elif body["auth"] == "password":
+                                    e["oauth_refresh"] = ""
+                            if body.get("ms_client_id"):
+                                e["ms_client_id"] = str(body["ms_client_id"]).strip()
                             engine.save_cfg()
                         engine.log("Ρυθμίσεις email άλλαξαν (web)")
                         return self._send(200, {"ok": True, "msg": "Οι ρυθμίσεις email αποθηκεύτηκαν"})
+                    if p == "/api/admin/alarms":
+                        a = engine.cfg["alarms"]
+                        with engine.lock:
+                            for k in ("enabled", "offline"):
+                                if k in body:
+                                    a[k] = bool(body[k])
+                            for k in ("temp_min", "temp_max", "hum_min", "hum_max"):
+                                if k in body:
+                                    a[k] = float(body[k])
+                            if "cooldown_min" in body:
+                                a["cooldown_min"] = int(body["cooldown_min"])
+                            engine.save_cfg()
+                        engine.log("Όρια ειδοποιήσεων άλλαξαν (web)")
+                        return self._send(200, {"ok": True, "msg": "Τα όρια αποθηκεύτηκαν"})
                     if p == "/api/admin/email/gmail":
                         ok, msg = engine.gmail_login(str(body.get("user", "")), str(body.get("app_pw", "")),
                                                      str(body.get("to", "")))
@@ -6447,6 +6537,10 @@ if not HEADLESS:
             r.addWidget(_btn("✉ Δοκιμαστικό email", self._test_email))
             r.addWidget(_btn("📤 Αποστολή αναφοράς τώρα", self._report_now))
             right.addLayout(r)
+            pb = _btn("🛰  Στείλε τις ρυθμίσεις στην πλακέτα (Luckfox / Pi)", self._push_board, True)
+            pb.setMinimumHeight(42)
+            pb.setToolTip("Η πλακέτα θα στέλνει μόνη της τις αναφορές και τις ειδοποιήσεις — 24/7, χωρίς ανοιχτό PC")
+            right.addWidget(pb)
             right.addStretch()
             lay.addLayout(right, 1)
             return w
@@ -6665,6 +6759,90 @@ if not HEADLESS:
             finally:
                 QApplication.restoreOverrideCursor()
             (QMessageBox.information if ok else QMessageBox.warning)(self, APP_NAME, msg)
+
+        def _board_addresses(self):
+            """Διευθύνσεις της πλακέτας από τις ρυθμίσεις του AirSense Remote (καρτέλα 🛰 Πλακέτα)."""
+            out, pin = [], ""
+            try:
+                rp = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~/.config"), "AirSense Remote", "config.json")
+                rc = json.load(open(rp, encoding="utf-8"))
+                wp = int(rc.get("web_port") or 8765)
+                pin = str(rc.get("pin") or "")
+                for k, ic in (("lan", "🏠"), ("mdns", "🔤"), ("tailscale", "🌍")):
+                    if rc.get(k):
+                        out.append(f"{ic}  http://{rc[k]}:{wp}")
+            except Exception:
+                pass
+            return out or ["🔤  http://airsense.local:8765"], pin
+
+        def _push_board(self):
+            self._save_email()
+            d = QDialog(self)
+            d.setWindowTitle("🛰 Ρυθμίσεις email → πλακέτα")
+            d.setMinimumWidth(640)
+            v = QVBoxLayout(d)
+            intro = QLabel("Η πλακέτα (Luckfox / Raspberry Pi) θα στέλνει <b>μόνη της</b> την ημερήσια αναφορά και τις "
+                               "ειδοποιήσεις ορίων — 24/7, χωρίς ανοιχτό υπολογιστή.<br>Στέλνονται: λογαριασμός email "
+                               "(Google / Outlook), παραλήπτες, ώρα αναφοράς και όρια ειδοποιήσεων.")
+            intro.setWordWrap(True)
+            v.addWidget(intro)
+            fl = QFormLayout()
+            addrs, pin0 = self._board_addresses()
+            addr = QComboBox()
+            addr.setEditable(True)
+            addr.addItems(addrs)
+            pin = QLineEdit(pin0)
+            pin.setPlaceholderText("κενό αν η πλακέτα δεν έχει PIN")
+            adm = QLineEdit(dec_secret(self.engine.cfg.get("board_admin", "")))
+            adm.setEchoMode(QLineEdit.EchoMode.Password)
+            adm.setPlaceholderText("της web διαχείρισης ⚙ — αν δεν υπάρχει, ορίζεται τώρα")
+            remember = QCheckBox("Θυμήσου τον κωδικό (κρυπτογραφημένο)")
+            remember.setChecked(bool(self.engine.cfg.get("board_admin")))
+            test = QCheckBox("Στείλε και δοκιμαστικό email από την πλακέτα")
+            test.setChecked(True)
+            only = QCheckBox("Μετά στέλνει μόνο η πλακέτα (όχι διπλά email από αυτό το PC)")
+            only.setChecked(True)
+            fl.addRow("Πλακέτα:", addr)
+            fl.addRow("PIN:", pin)
+            fl.addRow("Κωδ. διαχειριστή:", adm)
+            fl.addRow("", remember)
+            fl.addRow("", test)
+            fl.addRow("", only)
+            v.addLayout(fl)
+            msg = QLabel()
+            msg.setWordWrap(True)
+            v.addWidget(msg)
+            go = _btn("📤  Αποστολή στην πλακέτα", None, True)
+            go.setMinimumHeight(44)
+            v.addWidget(go)
+
+            def run():
+                url = addr.currentText().split()[-1] if addr.currentText().split() else ""
+                go.setEnabled(False)
+                msg.setText("⏳ Σύνδεση με την πλακέτα…")
+                with self.engine.lock:
+                    if remember.isChecked():
+                        self.engine.cfg["board_admin"] = enc_secret(adm.text())
+                    else:
+                        self.engine.cfg.pop("board_admin", None)
+                    self.engine.save_cfg()
+
+                def done(res, err):
+                    go.setEnabled(True)
+                    ok, m = res if res else (False, str(err))
+                    if ok and only.isChecked():
+                        with self.engine.lock:
+                            self.engine.cfg["email"]["enabled"] = False
+                            self.engine.save_cfg()
+                        self.em_en.setChecked(False)
+                        if hasattr(self, "em_stat"):
+                            self._mail_ui()
+                        m += "\n• ⏸ σε αυτό το PC τα email σταμάτησαν (τα στέλνει η πλακέτα)"
+                    col = "#22c55e" if ok else "#ef4444"
+                    msg.setText(f"<b style='color:{col}'>" + m.replace("\n", "<br>") + "</b>")
+                Bg(d, lambda: self.engine.push_mail_to_board(url, adm.text(), pin.text().strip(), test.isChecked()), done)
+            go.clicked.connect(run)
+            d.exec()
 
         def _test_email(self):
             self._run_busy(self.engine.send_test)
