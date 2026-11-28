@@ -103,12 +103,13 @@ dependencies {
 }
 
 // Android 14 framework for Robolectric (screenshot tests)
-val robolectricDeps: Configuration by configurations.creating
+val robolectric14: Configuration by configurations.creating
+val robolectric15: Configuration by configurations.creating
 dependencies {
-    robolectricDeps("org.robolectric:android-all:14-robolectric-10818077")
-    robolectricDeps("org.robolectric:android-all:15-robolectric-12650502")
+    robolectric14("org.robolectric:android-all:14-robolectric-10818077")
+    robolectric15("org.robolectric:android-all:15-robolectric-12650502")
 }
 tasks.register<Copy>("copyRobolectricDeps") {
-    from(robolectricDeps)
+    from(robolectric14, robolectric15)          // two configurations → Gradle keeps both versions
     into(layout.buildDirectory.dir("robolectric-deps"))
 }
