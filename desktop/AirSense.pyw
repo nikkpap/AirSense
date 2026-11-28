@@ -15,7 +15,7 @@ Developer : Nikolaos K. Paridis (aka nikkpap) — ALU DEV TEAM
 APP_NAME = "AirSense"
 OLD_APP_NAMES = ("ALU HygroLink", "ALU AirSense")   # παλιά ονόματα (μεταφορά δεδομένων/ρυθμίσεων)
 OLD_APP_NAME = OLD_APP_NAMES[0]
-APP_VERSION = "1.7.7"
+APP_VERSION = "1.7.8"
 AUTHOR = "Nikolaos K. Paridis (aka nikkpap)"
 TEAM = "ALU DEV TEAM"
 
@@ -2126,6 +2126,27 @@ def smtp_check(e):
             pass
 
 
+def invite_text(join_url, ts_link="", pin="", app_url=None):
+    """Μήνυμα πρόσκλησης (Ελληνικά + English) για WhatsApp / Viber / email."""
+    app_url = app_url or "https://github.com/nikkpap/AirSense/releases/latest"
+    ts = ("https://play.google.com/store/apps/details?id=com.tailscale.ipn")
+    j = join_url + (f"?p={urllib.parse.quote(pin)}" if pin else "")
+    lines = ["👋 Σε προσκαλώ στο AirSense — θερμοκρασία & υγρασία στο κινητό σου.", ""]
+    n = 1
+    if ts_link:
+        lines += [f"{n}) Εγκατάστησε το Tailscale: {ts}", f"{n + 1}) Άνοιξε την πρόσκληση και κάνε login (Google / Microsoft): {ts_link}"]
+        n += 2
+    lines += [f"{n}) Εγκατάστησε το AirSense (AirSense-Android_vX.apk): {app_url}",
+              f"{n + 1}) " + ("Με ανοιχτό το Tailscale, άνοιξε" if ts_link else "Στο ίδιο WiFi, άνοιξε") + f": {j}",
+              "   → «📲 Άνοιγμα στην εφαρμογή» = έτοιμο!"]
+    if pin:
+        lines.append(f"PIN: {pin}")
+    lines += ["", "— English —",
+              ("Install Tailscale + accept the invite, then " if ts_link else "On the same WiFi, ") +
+              f"install the AirSense app and open {j} → “Open in the app”."]
+    return "\n".join(lines)
+
+
 def mail_list(text):
     """«a@x.gr; b@y.gr» (ή με κόμμα / κενό / νέα γραμμή) → λίστα email χωρίς διπλά."""
     out = []
@@ -3170,6 +3191,37 @@ ICON_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect 
 <path d="M32 8C32 8 14 30 14 40a18 18 0 0 0 36 0C50 30 32 8 32 8z" fill="#3fa7ff"/>
 <path d="M24 41a8 8 0 0 0 8 8" stroke="#fff" stroke-width="4" fill="none" stroke-linecap="round"/></svg>"""
 
+APK_URL = "https://github.com/nikkpap/AirSense/releases/latest"
+TS_PLAY = "https://play.google.com/store/apps/details?id=com.tailscale.ipn"
+
+JOIN_HTML = r"""<!doctype html><html lang="el"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>AirSense · Πρόσκληση</title>
+<style>body{margin:0;font-family:system-ui,Segoe UI,Roboto,sans-serif;background:#0f131a;color:#e6ebf5}
+.w{max-width:520px;margin:0 auto;padding:22px}h1{font-size:24px;margin:6px 0}p{color:#aab4c6;line-height:1.5}
+.c{background:#171c26;border:1px solid #262d3b;border-radius:16px;padding:16px;margin:12px 0}
+.n{display:inline-block;width:26px;height:26px;border-radius:50%;background:#2b6cff;color:#fff;text-align:center;line-height:26px;font-weight:700;margin-right:8px}
+a.b{display:block;text-align:center;padding:14px;border-radius:12px;background:#2b6cff;color:#fff;text-decoration:none;font-weight:700;font-size:17px;margin-top:10px}
+a.o{background:transparent;border:1px solid #3a4458;color:#9fc0ff;font-weight:600;font-size:15px}
+small{color:#8b96ab}</style></head><body><div class="w">
+<div style="font-size:44px">💧</div><h1>AirSense</h1>
+<p>Θερμοκρασία &amp; υγρασία από τους αισθητήρες, στο κινητό σου.<br><small>Temperature &amp; humidity on your phone.</small></p>
+<div class="c"><span class="n">1</span><b>Εφαρμογή AirSense</b> <small>· app</small>
+<a class="b o" href="__APK__">⬇ Λήψη AirSense (APK) · Download</a></div>
+<div class="c"><span class="n">2</span><b>Σύνδεση με ένα πάτημα</b> <small>· connect in one tap</small>
+<a class="b" id="go" href="#">📲 Άνοιγμα στην εφαρμογή · Open in the app</a>
+<p style="margin:10px 0 0"><small>Ή στην εφαρμογή → Ρυθμίσεις → Σύνδεση:<br><b id="addr"></b></small></p></div>
+<p><small>Αυτή η σελίδα ανοίγει μόνο μέσω Tailscale ή στο ίδιο WiFi — άρα η σύνδεση δουλεύει.<br>
+AirSense v__VER__ · Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM</small></p></div>
+<script>
+var q=new URLSearchParams(location.search),pin=q.get('p')||'',o=location.origin;
+document.getElementById('addr').textContent=o+(pin?'  ·  PIN '+pin:'');
+var d='connect?url='+encodeURIComponent(o)+(pin?'&pin='+encodeURIComponent(pin):'');
+var ua=navigator.userAgent||'';
+document.getElementById('go').href=/Android/i.test(ua)
+ ?'intent://'+d+'#Intent;scheme=airsense;package=gr.nikkpap.airsense;S.browser_fallback_url='+encodeURIComponent('__APK__')+';end'
+ :'airsense://'+d;
+</script></body></html>"""
+
 INDEX_HTML = r"""<!doctype html><html lang="el"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0f131a" media="(prefers-color-scheme: dark)"><meta name="theme-color" content="#f4f6fa" media="(prefers-color-scheme: light)"><link rel="manifest" href="/manifest.json">
@@ -3493,12 +3545,20 @@ def make_handler(engine):
                     data = build_setup_pdf(engine.server_urls(), bool(engine.cfg["server"].get("pin")), APP_VERSION)
                     return self._send(200, data, "application/pdf",
                                       {"Content-Disposition": 'inline; filename="AirSense_Phone_Setup_GR_EN.pdf"'})
+                if p in ("/join", "/invite"):                     # πρόσκληση: σύνδεση με ένα πάτημα (χωρίς μυστικά)
+                    return self._send(200, JOIN_HTML.replace("__VER__", APP_VERSION).replace("__APK__", APK_URL),
+                                      "text/html; charset=utf-8")
                 if not p.startswith("/api/"):
                     return self._send(404, {"error": "not found"})
                 if not self._auth(qs):
                     return self._send(401, {"error": "PIN"})
                 if p == "/api/status":
                     return self._send(200, engine.status_dict())
+                if p == "/api/invite":
+                    inv = engine.cfg.get("invite") or {}
+                    return self._send(200, {"ok": True, "tailscale": inv.get("tailscale", ""), "apk": APK_URL, "ts_app": TS_PLAY,
+                                            "version": APP_VERSION, "has_pin": bool(engine.cfg["server"].get("pin")),
+                                            "urls": [{"label": l, "url": u} for l, u in engine.server_urls() if "127.0.0.1" not in u]})
                 if p == "/api/weather":
                     return self._send(200, engine.weather_dict())
                 if p == "/api/geocode":
@@ -3616,7 +3676,7 @@ def make_handler(engine):
                     engine.save_cfg()
                     engine.log("Ορίστηκε κωδικός διαχειριστή (web)")
                     return self._send(200, {"ok": True, "msg": "Ο κωδικός διαχειριστή ορίστηκε"})
-                if p.startswith("/api/admin/") and p not in ("/api/admin/check", "/api/admin/calib", "/api/admin/update",
+                if p.startswith("/api/admin/") and p not in ("/api/admin/check", "/api/admin/calib", "/api/admin/update", "/api/admin/invite",
                                                              "/api/admin/update/check", "/api/admin/update/log"):
                     if not engine.admin_ok(body.get("admin", "")):
                         if body.get("admin"):
@@ -3717,6 +3777,16 @@ def make_handler(engine):
                     engine.save_cfg()
                     engine.log(f"Λεκτικά (από κινητό): {engine.cfg['labels']['inside']} / {engine.cfg['labels']['outside']}")
                     return self._send(200, {"ok": True, "msg": "Τα λεκτικά αποθηκεύτηκαν"})
+                if p == "/api/admin/invite":
+                    if not engine.admin_ok(body.get("admin", "")):
+                        return self._send(403, {"ok": False, "msg": "Λάθος κωδικός διαχειριστή"})
+                    link = str(body.get("tailscale", "")).strip()
+                    if link and not re.match(r"^https://(login\.)?tailscale\.com/", link):
+                        return self._send(400, {"ok": False, "msg": "Αυτό δεν μοιάζει με link πρόσκλησης Tailscale (https://login.tailscale.com/…)"})
+                    engine.cfg.setdefault("invite", {})["tailscale"] = link
+                    engine.save_cfg()
+                    engine.log("Πρόσκληση: αποθηκεύτηκε link Tailscale" if link else "Πρόσκληση: σβήστηκε το link Tailscale")
+                    return self._send(200, {"ok": True, "msg": "Αποθηκεύτηκε"})
                 if p in ("/api/admin/update", "/api/admin/update/check", "/api/admin/update/log"):
                     if not engine.admin_ok(body.get("admin", "")):
                         engine.log("Ενημέρωση από κινητό: λάθος κωδικός διαχειριστή", "warn")
@@ -6376,6 +6446,13 @@ if not HEADLESS:
             gr.addWidget(_btn("📄 PDF οδηγός κινητού", self._phone_guide_pdf, True))
             gr.addWidget(_btn("📂", lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(EXPORT_DIR))))
             lay.addLayout(gr)
+            ir = QHBoxLayout()
+            il = QLabel("<b>👥 Πρόσκληση για άλλους</b> — ένα μήνυμα (Viber, WhatsApp, email): μπαίνουν στο <b>Tailscale</b> σου, "
+                        "κατεβάζουν το AirSense και συνδέονται με ένα πάτημα.")
+            il.setWordWrap(True)
+            ir.addWidget(il, 1)
+            ir.addWidget(_btn("👥 Πρόσκληση", self._invite_dialog, True))
+            lay.addLayout(ir)
             g = QGroupBox("⚙ Server")
             h = QHBoxLayout(g)
             s_ = self.engine.cfg["server"]
@@ -6403,6 +6480,84 @@ if not HEADLESS:
             h.addWidget(_btn("🛡 Firewall", self._firewall))
             lay.addWidget(g)
             return w
+
+        def _invite_dialog(self):
+            d = QDialog(self)
+            d.setWindowTitle("👥 Πρόσκληση AirSense")
+            d.setMinimumWidth(640)
+            v = QVBoxLayout(d)
+            intro = QLabel("Βάλε <b>μία φορά</b> το link κοινοποίησης του Tailscale: "
+                           "<a style='color:#3fa7ff' href='https://login.tailscale.com/admin/machines'>login.tailscale.com → Machines</a> "
+                           "→ <b>airsense</b> → ⋯ → <b>Share…</b> → Reusable ON → <b>Copy link</b>.")
+            intro.setWordWrap(True)
+            intro.setOpenExternalLinks(True)
+            v.addWidget(intro)
+            inv = self.engine.cfg.setdefault("invite", {})
+            fl = QFormLayout()
+            link = QLineEdit(inv.get("tailscale", ""))
+            link.setPlaceholderText("https://login.tailscale.com/admin/invite/…")
+            # address the guest will use: the board (AirSense Remote settings) first, else this PC's server
+            addrs, pin0 = self._board_addresses()
+            opts = [a.split()[-1] for a in addrs if "🌍" in a] + [u for _l, u in self.engine.server_urls()
+                                                                  if "127.0.0.1" not in u and (".ts.net" in u or "//100." in u)]
+            try:
+                rc = json.load(open(os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~/.config"),
+                                                 "AirSense Remote", "config.json"), encoding="utf-8"))
+                if rc.get("magicdns"):
+                    opts.insert(0, f"http://{rc['magicdns']}:{int(rc.get('web_port') or 8765)}")
+            except Exception:
+                pass
+            opts += [a.split()[-1] for a in addrs if "🌍" not in a]
+            addr = QComboBox()
+            addr.setEditable(True)
+            addr.addItems(list(dict.fromkeys(opts)) or ["http://airsense.local:8765"])
+            pin = QLineEdit(pin0 or str(self.engine.cfg["server"].get("pin") or ""))
+            with_pin = QCheckBox("Μαζί και το PIN (αλλιώς θα του το πεις εσύ)")
+            fl.addRow("Link Tailscale:", link)
+            fl.addRow("Διεύθυνση AirSense:", addr)
+            fl.addRow("PIN:", pin)
+            fl.addRow("", with_pin)
+            v.addLayout(fl)
+            txt = QPlainTextEdit()
+            txt.setMinimumHeight(220)
+            v.addWidget(txt)
+
+            def build(*_):
+                j = addr.currentText().strip().rstrip("/") + "/join"
+                txt.setPlainText(invite_text(j, link.text().strip(), pin.text().strip() if with_pin.isChecked() else ""))
+            for w_ in (link, pin):
+                w_.textChanged.connect(build)
+            addr.currentTextChanged.connect(build)
+            with_pin.toggled.connect(build)
+            build()
+            row = QHBoxLayout()
+
+            def save_link():
+                with self.engine.lock:
+                    inv["tailscale"] = link.text().strip()
+                    self.engine.save_cfg()
+
+            def copy():
+                save_link()
+                QApplication.clipboard().setText(txt.toPlainText())
+                b_copy.setText("✔ Αντιγράφηκε")
+                QTimer.singleShot(1500, lambda: b_copy.setText("📋 Αντιγραφή"))
+
+            def mail():
+                save_link()
+                QDesktopServices.openUrl(QUrl("mailto:?subject=" + urllib.parse.quote("Πρόσκληση AirSense") +
+                                              "&body=" + urllib.parse.quote(txt.toPlainText())))
+            b_copy = _btn("📋 Αντιγραφή", copy, True)
+            row.addWidget(b_copy)
+            row.addWidget(_btn("✉ Email", mail))
+            row.addStretch()
+            v.addLayout(row)
+            note = QLabel("<span style='color:#8b96ab'>Ο άλλος ανοίγει το link Tailscale (login με Google / Microsoft), μετά τη σελίδα "
+                          "…/join με ανοιχτό το Tailscale → «📲 Άνοιγμα στην εφαρμογή». Η πλακέτα θέλει AirSense v1.7.8+.</span>")
+            note.setWordWrap(True)
+            v.addWidget(note)
+            d.exec()
+            save_link()
 
         def _phone_guide_pdf(self):
             try:

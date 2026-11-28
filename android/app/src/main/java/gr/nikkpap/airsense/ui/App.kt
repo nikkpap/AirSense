@@ -275,9 +275,10 @@ fun isTailscaleHost(raw: String): Boolean {
 fun ConnectionForm(vm: MainViewModel, onConnected: () -> Unit = {}) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    var local by remember { mutableStateOf(vm.prefs.localUrl) }
-    var ts by remember { mutableStateOf(vm.prefs.tsUrl) }
-    var pin by remember { mutableStateOf(vm.prefs.pin) }
+    val seq = vm.ui.collectAsState().value.inviteSeq           // an invitation link filled the fields → show them
+    var local by remember(seq) { mutableStateOf(vm.prefs.localUrl) }
+    var ts by remember(seq) { mutableStateOf(vm.prefs.tsUrl) }
+    var pin by remember(seq) { mutableStateOf(vm.prefs.pin) }
     var result by remember { mutableStateOf<String?>(null) }
     var ok by remember { mutableStateOf(false) }
     var testing by remember { mutableStateOf(false) }

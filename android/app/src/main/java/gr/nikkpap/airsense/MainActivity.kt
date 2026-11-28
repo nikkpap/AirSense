@@ -25,7 +25,22 @@ class MainActivity : ComponentActivity() {
             notifPerm.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
         if (vm.prefs.configured && vm.prefs.liveEnabled) runCatching { MonitorService.start(this) }
+        handleInvite(intent)
         setContent { App(vm) }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        handleInvite(intent)
+    }
+
+    /** airsense://connect?url=…&pin=… → connect by itself */
+    private fun handleInvite(i: android.content.Intent?) {
+        val u = i?.data ?: return
+        if (u.scheme == "airsense" && u.host == "connect") {
+            vm.applyInvite(u.getQueryParameter("url").orEmpty(), u.getQueryParameter("pin"))
+            i.data = null
+        }
     }
 
     override fun onStart() {

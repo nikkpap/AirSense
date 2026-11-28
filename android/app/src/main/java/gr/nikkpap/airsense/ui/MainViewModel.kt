@@ -65,7 +65,12 @@ data class UiState(
     val srvChecking: Boolean = false,
     val srvUpdating: Boolean = false,
     val srvLog: String = "",
+    // invitation
+    val inviteSeq: Int = 0,                 // changes when an invitation filled the connection fields
+    val invite: InviteInfo? = null,
 )
+
+data class InviteInfo(val tailscale: String, val apk: String, val tsApp: String, val joinBase: String, val hasPin: Boolean)
 
 data class SrvUpdate(val ok: Boolean, val current: String, val latest: String, val newer: Boolean,
                      val board: Boolean, val notes: String, val msg: String)
@@ -307,6 +312,78 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         } finally {
             update { it.copy(srvUpdating = false) }
         }
+    }
+
+    // ═════════ Πρόσκληση άλλων ═════════
+    /** From an invitation link: fill the address (+ PIN), test, and finish setup by itself. */
+    fun applyInvite(url: String, pin: String?) {
+        val u = api.normalize(url)
+        if (u.isBlank()) return
+        if (isTailscaleHost(u)) prefs.tsUrl = u else prefs.localUrl = u
+        if (pin != null) prefs.pin = pin
+        prefs.lastGood = ""
+        update { it.copy(inviteSeq = it.inviteSeq + 1) }
+        viewModelScope.launch {
+            say(t("📨 Πρόσκληση: σύνδεση με $u…", "📨 Invitation: connecting to $u…"))
+            val err = testConnection()
+            if (err == null) {
+                if (!_ui.value.configured) finishSetup() else refreshNow()
+                say(t("✔ Συνδέθηκε!", "✔ Connected!"))
+            } else say(t("Δεν συνδέθηκε: ", "Not connected: ") + err +
+                    t(" — είναι ανοιχτό το Tailscale;", " — is Tailscale on?"))
+        }
+    }
+
+    fun loadInvite(): Job = viewModelScope.launch {
+        runCatching { api.get("/api/invite") }.onSuccess { j ->
+            val urls = (0 until (j.optJSONArray("urls")?.length() ?: 0)).mapNotNull { j.optJSONArray("urls")?.optJSONObject(it)?.optString("url") }
+            val join = urls.firstOrNull { it.contains(".ts.net") } ?: urls.firstOrNull { isTailscaleHost(it) }
+                ?: prefs.magicUrl.ifBlank { null } ?: prefs.tsUrl.ifBlank { null } ?: urls.firstOrNull() ?: api.currentBase()
+            update { it.copy(invite = InviteInfo(j.optString("tailscale"), j.optString("apk"), j.optString("ts_app"),
+                api.normalize(join), j.optBoolean("has_pin"))) }
+        }.onFailure { say(t("Σφάλμα: ", "Error: ") + it.message) }
+    }
+
+    fun saveInviteLink(link: String): Job = viewModelScope.launch {
+        try {
+            val r = api.post("/api/admin/invite", JSONObject().put("admin", adminPw ?: "").put("tailscale", link.trim()))
+            say(r.optString("msg").ifBlank { "OK" })
+            loadInvite()
+        } catch (e: Exception) {
+            if (e is gr.nikkpap.airsense.data.ApiException && e.code == 403) adminPw = null
+            say(t("Σφάλμα: ", "Error: ") + e.message)
+        }
+    }
+
+    fun inviteText(withPin: Boolean): String {
+        val i = _ui.value.invite ?: return ""
+        val pin = if (withPin) prefs.pin else ""
+        val join = i.joinBase + "/join" + (if (pin.isNotBlank()) "?p=" + java.net.URLEncoder.encode(pin, "UTF-8") else "")
+        val en = _ui.value.en
+        val b = StringBuilder()
+        var n = 1
+        if (!en) {
+            b.append("👋 Σε προσκαλώ στο AirSense — θερμοκρασία & υγρασία στο κινητό σου.\n\n")
+            if (i.tailscale.isNotBlank()) {
+                b.append("$n) Εγκατάστησε το Tailscale: ${i.tsApp}\n"); n++
+                b.append("$n) Άνοιξε την πρόσκληση και κάνε login (Google / Microsoft): ${i.tailscale}\n"); n++
+            }
+            b.append("$n) Εγκατάστησε το AirSense (AirSense-Android_vX.apk): ${i.apk}\n"); n++
+            b.append("$n) ${if (i.tailscale.isNotBlank()) "Με ανοιχτό το Tailscale, άνοιξε" else "Στο ίδιο WiFi, άνοιξε"}: $join\n")
+            b.append("   → «📲 Άνοιγμα στην εφαρμογή» = έτοιμο!\n")
+            if (pin.isNotBlank()) b.append("PIN: $pin\n")
+        } else {
+            b.append("👋 You're invited to AirSense — temperature & humidity on your phone.\n\n")
+            if (i.tailscale.isNotBlank()) {
+                b.append("$n) Install Tailscale: ${i.tsApp}\n"); n++
+                b.append("$n) Open the invitation and log in (Google / Microsoft): ${i.tailscale}\n"); n++
+            }
+            b.append("$n) Install AirSense (AirSense-Android_vX.apk): ${i.apk}\n"); n++
+            b.append("$n) ${if (i.tailscale.isNotBlank()) "With Tailscale on, open" else "On the same WiFi, open"}: $join\n")
+            b.append("   → “📲 Open in the app” = done!\n")
+            if (pin.isNotBlank()) b.append("PIN: $pin\n")
+        }
+        return b.toString()
     }
 
     /** For screenshot tests only: show a prepared state. */

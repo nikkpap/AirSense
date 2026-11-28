@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -29,6 +30,7 @@ fun SettingsScreen(vm: MainViewModel, ui: UiState) {
         full("s1") { SectionTitle(tr("Σύνδεση", "Connection")) }
         item(key = "conn") { HCard { ConnectionForm(vm) { vm.refreshNow() } } }
         item(key = "ts") { TailscaleCard(vm, ui) }
+        item(key = "invite") { InviteCard(vm, ui) }
         item(key = "pdf") { HCard {
             Text(tr("📄 Οδηγός κινητού (PDF)", "📄 Phone guide (PDF)"), fontWeight = FontWeight.Bold)
             Text(
@@ -256,4 +258,85 @@ fun ServerUpdateCard(vm: MainViewModel, ui: UiState) {
         )
     }
     LaunchedEffect(unlocked) { if (unlocked && ui.srvCheck == null) vm.checkServerUpdate() }
+}
+
+/** 👥 Invite others: one message with the Tailscale invitation + app + one-tap connect link. */
+@Composable
+fun InviteCard(vm: MainViewModel, ui: UiState) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val inv = ui.invite
+    var withPin by remember { mutableStateOf(false) }
+    var link by remember(inv?.tailscale) { mutableStateOf(inv?.tailscale ?: "") }
+    var pw by remember { mutableStateOf("") }
+    var edit by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { if (ui.invite == null) vm.loadInvite() }
+    HCard {
+        Text(tr("👥 Πρόσκληση για άλλους", "👥 Invite others"), fontWeight = FontWeight.Bold)
+        Text(
+            tr("Ένα μήνυμα (Viber, WhatsApp, email): μπαίνουν στο Tailscale σου, κατεβάζουν το AirSense και συνδέονται με ένα πάτημα.",
+                "One message (Viber, WhatsApp, email): they join your Tailscale, get AirSense and connect with one tap."),
+            fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(8.dp))
+        if (inv == null) {
+            LinearProgressIndicator(Modifier.fillMaxWidth())
+            return@HCard
+        }
+        if (inv.tailscale.isBlank() || edit) {
+            Text(
+                if (inv.tailscale.isBlank()) tr("⚠ Λείπει το link πρόσκλησης Tailscale", "⚠ Tailscale invitation link missing")
+                else tr("Link πρόσκλησης Tailscale", "Tailscale invitation link"),
+                color = if (inv.tailscale.isBlank()) WarnC else MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 14.sp
+            )
+            Text(
+                tr("login.tailscale.com → Machines → airsense → ⋯ → Share… → Reusable ON → Copy link. Μία φορά — το κρατάει ο server.",
+                    "login.tailscale.com → Machines → airsense → ⋯ → Share… → Reusable ON → Copy link. Once — the server keeps it."),
+                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            OutlinedButton(onClick = { openUrl(ctx, "https://login.tailscale.com/admin/machines") }) { Text(tr("Άνοιγμα Tailscale admin", "Open Tailscale admin")) }
+            OutlinedTextField(link, { link = it }, Modifier.fillMaxWidth(), singleLine = true,
+                label = { Text("https://login.tailscale.com/…") })
+            if (vm.adminPw == null) {
+                OutlinedTextField(pw, { pw = it }, Modifier.fillMaxWidth(), singleLine = true,
+                    label = { Text(tr("Κωδικός διαχειριστή", "Admin password")) },
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
+            }
+            Spacer(Modifier.height(6.dp))
+            Button(enabled = link.isNotBlank() && (vm.adminPw != null || pw.isNotBlank()), onClick = {
+                scope.launch {
+                    if (vm.adminPw == null) {
+                        if (runCatching { vm.adminCheck(pw) }.getOrDefault(false)) vm.adminPw = pw
+                        else { vm.say(vm.t("Λάθος κωδικός διαχειριστή", "Wrong admin password")); return@launch }
+                    }
+                    vm.saveInviteLink(link); edit = false
+                }
+            }) { Text(tr("💾 Αποθήκευση", "💾 Save")) }
+            HorizontalDivider(Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.outlineVariant)
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("✔ Tailscale: " + inv.tailscale.substringAfterLast("/").take(10) + "…", fontSize = 13.sp, color = OkC, modifier = Modifier.weight(1f))
+                TextButton(onClick = { edit = true }) { Text(tr("Αλλαγή", "Change")) }
+            }
+        }
+        Text(tr("Σύνδεση μέσω: ", "Connects via: ") + inv.joinBase, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (vm.prefs.pin.isNotBlank()) {
+            SwitchRow(tr("Μαζί και το PIN", "Include the PIN"), tr("Αλλιώς θα του το πεις εσύ", "Otherwise tell it yourself"), withPin) { withPin = it }
+        }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = {
+                val txt = vm.inviteText(withPin)
+                val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
+                    .putExtra(android.content.Intent.EXTRA_SUBJECT, "AirSense")
+                    .putExtra(android.content.Intent.EXTRA_TEXT, txt)
+                runCatching { ctx.startActivity(android.content.Intent.createChooser(send, vm.t("Πρόσκληση AirSense", "AirSense invitation"))) }
+            }) { Icon(Icons.Filled.Share, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(tr("Κοινοποίηση", "Share")) }
+            OutlinedButton(onClick = {
+                val cm = ctx.getSystemService(android.content.ClipboardManager::class.java)
+                cm?.setPrimaryClip(android.content.ClipData.newPlainText("AirSense", vm.inviteText(withPin)))
+                vm.say(vm.t("📋 Αντιγράφηκε", "📋 Copied"))
+            }) { Text(tr("Αντιγραφή", "Copy")) }
+        }
+    }
 }

@@ -101,6 +101,26 @@ class ScreensTest {
         rule.onRoot().captureRoboImage("build/shots/$name.png")
     }
 
+    private fun invite(name: String, theme: String, link: String) {
+        val vm = MainViewModel(ApplicationProvider.getApplicationContext())
+        val s = state(theme).copy(invite = InviteInfo(link, "https://github.com/nikkpap/AirSense/releases/latest",
+            "https://play.google.com/store/apps/details?id=com.tailscale.ipn", "http://airsense.tailXXXX.ts.net:8765", true))
+        rule.setContent {
+            HygroTheme(s.theme, false) {
+                CompositionLocalProvider(LocalEn provides false) {
+                    androidx.compose.material3.Surface(color = androidx.compose.material3.MaterialTheme.colorScheme.background) {
+                        androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.padding(14.dp)) { InviteCard(vm, s) }
+                    }
+                }
+            }
+        }
+        rule.waitForIdle()
+        rule.onRoot().captureRoboImage("build/shots/$name.png")
+    }
+
+    @Test @Config(qualifiers = PHONE) fun invite_ready_light() = invite("15_invite_ready_light", "light", "https://login.tailscale.com/admin/invite/EXAMPLE123")
+    @Test @Config(qualifiers = PHONE) fun invite_missing_dark() = invite("16_invite_missing_dark", "dark", "")
+
     @Test @Config(qualifiers = PHONE) fun update_locked_dark() = card("13_update_locked_dark", "dark", false)
     @Test @Config(qualifiers = PHONE) fun update_unlocked_light() = card("14_update_unlocked_light", "light", true)
 
