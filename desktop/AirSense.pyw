@@ -15,7 +15,7 @@ Developer : Nikolaos K. Paridis (aka nikkpap) — ALU DEV TEAM
 APP_NAME = "AirSense"
 OLD_APP_NAMES = ("ALU HygroLink", "ALU AirSense")   # παλιά ονόματα (μεταφορά δεδομένων/ρυθμίσεων)
 OLD_APP_NAME = OLD_APP_NAMES[0]
-APP_VERSION = "1.7.6"
+APP_VERSION = "1.7.7"
 AUTHOR = "Nikolaos K. Paridis (aka nikkpap)"
 TEAM = "ALU DEV TEAM"
 
@@ -2794,6 +2794,67 @@ class Engine:
         self.ms_flow = {}
         self.log("✉ Αποσύνδεση email")
 
+    # ── ενημέρωση του server από το κινητό (με κωδικό διαχειριστή) ──
+    UPDATER = "/usr/local/sbin/airsense-update"
+
+    def on_board(self):
+        return os.name != "nt" and os.path.exists(self.UPDATER)
+
+    def update_check(self):
+        """Τρέχουσα έκδοση + τελευταία στο GitHub."""
+        latest, notes = "", ""
+        try:
+            req = urllib.request.Request("https://api.github.com/repos/nikkpap/AirSense/releases/latest",
+                                         headers={"Accept": "application/vnd.github+json", "User-Agent": f"{APP_NAME}/{APP_VERSION}"})
+            with urllib.request.urlopen(req, timeout=20) as r:
+                j = json.loads(r.read().decode("utf-8"))
+            latest = re.sub(r"^v", "", j.get("tag_name") or "")
+            notes = (j.get("body") or "")[:1500]
+        except Exception as ex:
+            return {"ok": False, "current": APP_VERSION, "latest": "", "board": self.on_board(),
+                    "msg": f"Το GitHub δεν απαντά ({ex})"}
+
+        def key(v):
+            return [int(x) for x in re.findall(r"\d+", v)]
+        newer = bool(latest) and key(latest) > key(APP_VERSION)
+        return {"ok": True, "current": APP_VERSION, "latest": latest, "newer": newer, "notes": notes,
+                "board": self.on_board(), "running": self._update_running(),
+                "msg": (f"Νέα έκδοση v{latest}" if newer else f"Έχει την τελευταία έκδοση (v{APP_VERSION})")}
+
+    def _update_running(self):
+        return bool(getattr(self, "_upd_proc", None)) and self._upd_proc.poll() is None
+
+    def update_start(self):
+        if not self.on_board():
+            return False, ("Η ενημέρωση από το κινητό γίνεται μόνο στην πλακέτα (Luckfox / Raspberry Pi). "
+                           "Στον υπολογιστή: κατεβάστε το νέο AirSense από το GitHub.")
+        if self._update_running():
+            return True, "Η ενημέρωση τρέχει ήδη…"
+        cmd = [self.UPDATER, "--force"]
+        started = False
+        if shutil.which("systemd-run"):                # έξω από την υπηρεσία → δεν κόβεται όταν ο server ξεκινήσει ξανά
+            try:
+                r = subprocess.run(["systemd-run", "--quiet", "--collect", f"--unit=airsense-update-now-{int(time.time())}"] + cmd,
+                                   capture_output=True, timeout=20)
+                started = r.returncode == 0
+            except Exception:
+                started = False
+        if not started:
+            try:
+                self._upd_proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+            except Exception as ex:
+                return False, f"Δεν ξεκίνησε: {ex}"
+        self.log("⬇ Ενημέρωση από κινητό (διαχειριστής) — έλεγχος GitHub…")
+        return True, ("⬇ Η ενημέρωση ξεκίνησε. Αν υπάρχει νέα έκδοση, ο server θα ξεκινήσει ξανά σε 1–3 λεπτά "
+                      "(η εφαρμογή θα συνδεθεί μόνη της).")
+
+    def update_log(self):
+        try:
+            with open("/var/lib/airsense/update.log", encoding="utf-8", errors="replace") as f:
+                return "".join(f.readlines()[-12:])
+        except Exception:
+            return ""
+
     def push_mail_to_board(self, base, admin, pin="", test=True):
         """📤 Αντιγράφει τις ρυθμίσεις email + όρια ειδοποιήσεων του PC στην πλακέτα (μέσω της web διαχείρισης)."""
         base = base.strip().rstrip("/")
@@ -3555,7 +3616,8 @@ def make_handler(engine):
                     engine.save_cfg()
                     engine.log("Ορίστηκε κωδικός διαχειριστή (web)")
                     return self._send(200, {"ok": True, "msg": "Ο κωδικός διαχειριστή ορίστηκε"})
-                if p.startswith("/api/admin/") and p not in ("/api/admin/check", "/api/admin/calib"):
+                if p.startswith("/api/admin/") and p not in ("/api/admin/check", "/api/admin/calib", "/api/admin/update",
+                                                             "/api/admin/update/check", "/api/admin/update/log"):
                     if not engine.admin_ok(body.get("admin", "")):
                         if body.get("admin"):
                             engine.log("Λάθος κωδικός διαχειριστή (web)", "warn")
@@ -3655,6 +3717,16 @@ def make_handler(engine):
                     engine.save_cfg()
                     engine.log(f"Λεκτικά (από κινητό): {engine.cfg['labels']['inside']} / {engine.cfg['labels']['outside']}")
                     return self._send(200, {"ok": True, "msg": "Τα λεκτικά αποθηκεύτηκαν"})
+                if p in ("/api/admin/update", "/api/admin/update/check", "/api/admin/update/log"):
+                    if not engine.admin_ok(body.get("admin", "")):
+                        engine.log("Ενημέρωση από κινητό: λάθος κωδικός διαχειριστή", "warn")
+                        return self._send(403, {"ok": False, "msg": "Λάθος κωδικός διαχειριστή"})
+                    if p == "/api/admin/update/check":
+                        return self._send(200, engine.update_check())
+                    if p == "/api/admin/update/log":
+                        return self._send(200, {"ok": True, "log": engine.update_log()})
+                    ok, msg = engine.update_start()
+                    return self._send(200, {"ok": ok, "msg": msg})
                 if p == "/api/admin/calib":
                     if not engine.admin_ok(body.get("admin", "")):
                         return self._send(403, {"ok": False, "msg": "Λάθος κωδικός διαχειριστή"})

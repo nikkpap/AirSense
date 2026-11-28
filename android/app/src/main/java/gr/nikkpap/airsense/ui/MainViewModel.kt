@@ -60,7 +60,15 @@ data class UiState(
     val tsVpn: Boolean = false,
     val tsAuto: String = "smart",           // smart · always · off
     val tsAutoOff: Boolean = true,
+    // server (board) update — admin only
+    val srvCheck: SrvUpdate? = null,
+    val srvChecking: Boolean = false,
+    val srvUpdating: Boolean = false,
+    val srvLog: String = "",
 )
+
+data class SrvUpdate(val ok: Boolean, val current: String, val latest: String, val newer: Boolean,
+                     val board: Boolean, val notes: String, val msg: String)
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     val prefs = Prefs(app)
@@ -235,6 +243,70 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         update { it.copy(refreshing = true) }
         try { refresh(false) } finally { update { it.copy(refreshing = false) } }
         updateTs()
+    }
+
+    // ═════════ Ενημέρωση server / πλακέτας (κωδικός διαχειριστή) ═════════
+    private fun adminBody() = JSONObject().put("admin", adminPw ?: "")
+
+    fun checkServerUpdate(): Job = viewModelScope.launch {
+        update { it.copy(srvChecking = true) }
+        try {
+            val r = api.post("/api/admin/update/check", adminBody())
+            update {
+                it.copy(srvCheck = SrvUpdate(r.optBoolean("ok"), r.optString("current"), r.optString("latest"),
+                    r.optBoolean("newer"), r.optBoolean("board"), r.optString("notes"), r.optString("msg")))
+            }
+        } catch (e: Exception) {
+            if (e is gr.nikkpap.airsense.data.ApiException && e.code == 403) adminPw = null
+            say(t("Σφάλμα: ", "Error: ") + e.message)
+        } finally {
+            update { it.copy(srvChecking = false) }
+        }
+    }
+
+    fun loadServerUpdateLog(): Job = viewModelScope.launch {
+        runCatching { api.post("/api/admin/update/log", adminBody()).optString("log") }
+            .onSuccess { l -> update { it.copy(srvLog = l.ifBlank { "—" }) } }
+            .onFailure { say(t("Σφάλμα: ", "Error: ") + it.message) }
+    }
+
+    /** ⬇ Update the board's AirSense now, then wait until the server comes back with the new version. */
+    fun startServerUpdate(): Job = viewModelScope.launch {
+        val old = _ui.value.status?.version ?: _ui.value.srvCheck?.current ?: ""
+        try {
+            val r = api.post("/api/admin/update", adminBody())
+            say(r.optString("msg").ifBlank { "OK" })
+            if (!r.optBoolean("ok")) return@launch
+        } catch (e: Exception) {
+            say(t("Σφάλμα: ", "Error: ") + e.message)
+            return@launch
+        }
+        update { it.copy(srvUpdating = true) }
+        try {
+            repeat(48) { i ->                       // up to 4 minutes
+                delay(5000)
+                refresh(true)
+                val v = _ui.value.status?.version
+                if (_ui.value.online == true && v != null && v != old) {
+                    say(t("✔ Ο server ενημερώθηκε: v$v", "✔ Server updated: v$v"))
+                    update { it.copy(srvCheck = it.srvCheck?.copy(current = v, newer = false, msg = "v$v")) }
+                    loadServerUpdateLog()
+                    return@launch
+                }
+                if (i % 4 == 3 && _ui.value.online == true) {
+                    val log = runCatching { api.post("/api/admin/update/log", adminBody()).optString("log") }.getOrDefault("")
+                    update { it.copy(srvLog = log) }
+                    val last = log.trim().lines().lastOrNull() ?: ""
+                    if (last.contains("✖") || last.contains("Up to date")) {
+                        say(t("Η ενημέρωση σταμάτησε: ", "Update stopped: ") + last.substringAfter(" ").substringAfter(" "))
+                        return@launch
+                    }
+                }
+            }
+            say(t("Ο server δεν γύρισε ακόμα — δες το «Ιστορικό»", "The server is not back yet — see “Log”"))
+        } finally {
+            update { it.copy(srvUpdating = false) }
+        }
     }
 
     /** For screenshot tests only: show a prepared state. */

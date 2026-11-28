@@ -12,6 +12,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import kotlinx.coroutines.launch
 import gr.nikkpap.airsense.BuildConfig
 
 @Composable
@@ -94,6 +101,8 @@ fun SettingsScreen(vm: MainViewModel, ui: UiState) {
                 ui.autoUpdate) { vm.setAutoUpdateCheck(it) }
         } }
 
+        item(key = "srvupd") { ServerUpdateCard(vm, ui) }
+
         full("s3") { SectionTitle(tr("Σχετικά", "About")) }
         item(key = "about") { HCard {
             Text("💧 AirSense ${BuildConfig.VERSION_NAME}", fontWeight = FontWeight.Bold, fontSize = 18.sp)
@@ -159,4 +168,92 @@ fun TailscaleCard(vm: MainViewModel, ui: UiState) {
             Button(onClick = { openUrl(ctx, gr.nikkpap.airsense.data.TailscaleCtl.PLAY) }) { Text(tr("Εγκατάσταση Tailscale", "Install Tailscale")) }
         }
     }
+}
+
+/** 🖥 Update AirSense on the board (Luckfox / Raspberry Pi) from the phone — admin password required. */
+@Composable
+fun ServerUpdateCard(vm: MainViewModel, ui: UiState) {
+    val scope = rememberCoroutineScope()
+    val en = LocalEn.current
+    var pw by remember { mutableStateOf("") }
+    var err by remember { mutableStateOf("") }
+    var confirm by remember { mutableStateOf(false) }
+    val unlocked = vm.adminPw != null
+    val c = ui.srvCheck
+    HCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(tr("🖥 Ενημέρωση πλακέτας", "🖥 Update the board"), fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            StatusPill("v" + (ui.status?.version ?: c?.current ?: "?"), Brand)
+        }
+        Text(
+            tr("Το AirSense στο Luckfox / Raspberry Pi — από το GitHub, με κωδικό διαχειριστή.",
+                "AirSense on the Luckfox / Raspberry Pi — from GitHub, with the admin password."),
+            fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(8.dp))
+        if (!unlocked) {
+            OutlinedTextField(
+                pw, { pw = it; err = "" }, Modifier.fillMaxWidth(), singleLine = true,
+                label = { Text(tr("Κωδικός διαχειριστή", "Admin password")) },
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+            )
+            if (err.isNotBlank()) Text(err, color = BadC, fontSize = 12.sp)
+            Spacer(Modifier.height(6.dp))
+            Button(enabled = pw.isNotBlank(), onClick = {
+                scope.launch {
+                    val ok = runCatching { vm.adminCheck(pw) }.getOrDefault(false)
+                    if (ok) { vm.adminPw = pw; pw = ""; vm.checkServerUpdate() }
+                    else err = if (en) "Wrong password (or not set on the board: airsense set-admin)"
+                    else "Λάθος κωδικός (ή δεν έχει οριστεί στην πλακέτα: airsense set-admin)"
+                }
+            }) { Icon(Icons.Filled.Lock, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(tr("Ξεκλείδωμα", "Unlock")) }
+        } else {
+            when {
+                ui.srvUpdating -> {
+                    Text(tr("⏳ Ενημέρωση… ο server θα ξεκινήσει ξανά (1–3 λεπτά)", "⏳ Updating… the server will restart (1–3 min)"),
+                        fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(6.dp))
+                    LinearProgressIndicator(Modifier.fillMaxWidth())
+                }
+                ui.srvChecking -> { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+                c != null && !c.board -> Text(
+                    tr("Ο server είναι υπολογιστής (όχι πλακέτα) — ενημέρωση εκεί από το GitHub.",
+                        "The server is a PC (not a board) — update it there from GitHub."), color = WarnC, fontSize = 13.sp)
+                c != null && c.newer -> {
+                    Text(tr("🆕 Νέα έκδοση v${c.latest} (τώρα v${c.current})", "🆕 New version v${c.latest} (now v${c.current})"),
+                        color = OkC, fontWeight = FontWeight.Bold)
+                    if (c.notes.isNotBlank()) Text(c.notes.take(400), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 6, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                }
+                c != null -> Text(if (c.ok) tr("✔ Έχει την τελευταία έκδοση (v${c.current})", "✔ Up to date (v${c.current})") else c.msg,
+                    color = if (c.ok) OkC else BadC, fontSize = 13.sp)
+            }
+            Spacer(Modifier.height(8.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(enabled = c?.newer == true && c.board && !ui.srvUpdating, onClick = { confirm = true }) {
+                    Icon(Icons.Filled.SystemUpdate, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(tr("Ενημέρωση τώρα", "Update now"))
+                }
+                OutlinedButton(enabled = !ui.srvChecking && !ui.srvUpdating, onClick = { vm.checkServerUpdate() }) { Text(tr("Έλεγχος", "Check")) }
+                TextButton(onClick = { vm.loadServerUpdateLog() }) { Text(tr("Ιστορικό", "Log")) }
+                TextButton(onClick = { vm.adminPw = null }) { Text(tr("Κλείδωμα", "Lock")) }
+            }
+            if (ui.srvLog.isNotBlank()) {
+                Spacer(Modifier.height(6.dp))
+                Text(ui.srvLog.trim(), fontSize = 11.sp, lineHeight = 14.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+    if (confirm) {
+        AlertDialog(
+            onDismissRequest = { confirm = false },
+            title = { Text(tr("Ενημέρωση πλακέτας;", "Update the board?")) },
+            text = { Text(tr("Θα κατέβει η v${c?.latest} από το GitHub και ο server θα ξεκινήσει ξανά (1–3 λεπτά χωρίς μετρήσεις). Οι ρυθμίσεις και το ιστορικό μένουν.",
+                "v${c?.latest} will be downloaded from GitHub and the server restarts (1–3 min without readings). Settings and history are kept.")) },
+            confirmButton = { Button(onClick = { confirm = false; vm.startServerUpdate() }) { Text(tr("Ενημέρωση", "Update")) } },
+            dismissButton = { TextButton(onClick = { confirm = false }) { Text(tr("Άκυρο", "Cancel")) } }
+        )
+    }
+    LaunchedEffect(unlocked) { if (unlocked && ui.srvCheck == null) vm.checkServerUpdate() }
 }

@@ -9,6 +9,8 @@ import androidx.test.core.app.ApplicationProvider
 import com.github.takahirom.roborazzi.captureRoboImage
 import gr.nikkpap.airsense.data.*
 import gr.nikkpap.airsense.ui.*
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -79,6 +81,28 @@ class ScreensTest {
         rule.onRoot().captureRoboImage("build/shots/$name.png")
     }
 
+
+    private fun card(name: String, theme: String, unlocked: Boolean) {
+        val vm = MainViewModel(ApplicationProvider.getApplicationContext())
+        if (unlocked) vm.adminPw = "x"
+        val s = state(theme).copy(srvCheck = if (unlocked) SrvUpdate(true, "1.7.6", "1.7.7", true, true,
+            "- Ενημέρωση πλακέτας από το κινητό\n- Διορθώσεις", "Νέα έκδοση v1.7.7") else null,
+            srvLog = if (unlocked) "2026-11-28 12:00 ✔ Up to date: v1.7.6 (GitHub: v1.7.6)" else "")
+        rule.setContent {
+            HygroTheme(s.theme, false) {
+                CompositionLocalProvider(LocalEn provides false) {
+                    androidx.compose.material3.Surface(color = androidx.compose.material3.MaterialTheme.colorScheme.background) {
+                        androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.padding(14.dp)) { ServerUpdateCard(vm, s) }
+                    }
+                }
+            }
+        }
+        rule.waitForIdle()
+        rule.onRoot().captureRoboImage("build/shots/$name.png")
+    }
+
+    @Test @Config(qualifiers = PHONE) fun update_locked_dark() = card("13_update_locked_dark", "dark", false)
+    @Test @Config(qualifiers = PHONE) fun update_unlocked_light() = card("14_update_unlocked_light", "light", true)
 
     @Test @Config(qualifiers = SMALL) fun home_small_dark() = shot("01_home_small_dark", "dark", 0)
     @Test @Config(qualifiers = SMALL) fun home_small_light() = shot("02_home_small_light", "light", 0)
