@@ -234,6 +234,7 @@ Raspberry Pi Zero 2 W: SSH over USB needs extra setup (USB gadget) — use `airs
 - **ON** = the file `~/tailscale.sh` exists · **OFF** (local only) = it does not. (`airsense tailscale on/off`)
 - Login: open the link / QR code it shows → Google / Microsoft / Apple account. Or `AUTHKEY="tskey-auth-…"` inside `tailscale.sh`.
 - On the phone: the **Tailscale** app with the **same account** → `http://100.x.x.x:8765`.
+- **Android app turns Tailscale on / off by itself** (Settings → 🌍 Tailscale): 🧠 Smart = only when the board does not answer on your WiFi · turned off again when you leave the app (only if AirSense turned it on). 🔑 button at the top = on/off. First time: open Tailscale once, log in, allow the VPN.
 - **MagicDNS** (by name, never changes): `http://airsense.tailXXXX.ts.net:8765` — works everywhere: Android app (Tailscale field, or learned by itself), AirSense / AirSense Remote (⚙ Settings → 🌍 MagicDNS, route «🌍 MagicDNS»), browser, `ssh`. Your name: Tailscale app → machine **airsense**, or `airsense status`.
 - **Tailscale SSH** is turned on automatically: `ssh USER@airsense` from any of your Tailscale devices.
 - In the [admin console](https://login.tailscale.com/admin/machines): machine **airsense** → ⋯ → **Disable key expiry** (so it never asks to log in again).
@@ -540,6 +541,7 @@ Raspberry Pi Zero 2 W: το SSH μέσω USB θέλει ειδική ρύθμι�
 - **ON** = υπάρχει το αρχείο `~/tailscale.sh` · **OFF** (μόνο τοπικά) = δεν υπάρχει. (`airsense tailscale on/off`)
 - Login: ανοίγεις το link/QR που δείχνει → λογαριασμός Google/Microsoft/Apple. Ή `AUTHKEY="tskey-auth-…"` μέσα στο `tailscale.sh`.
 - Στο κινητό: εφαρμογή **Tailscale** με τον **ίδιο λογαριασμό** → `http://100.x.x.x:8765`.
+- **Η εφαρμογή Android ανοίγει / κλείνει μόνη της το Tailscale** (Ρυθμίσεις → 🌍 Tailscale): 🧠 Έξυπνα = μόνο όταν η πλακέτα δεν απαντά στο WiFi σου · το κλείνει όταν φεύγεις από την εφαρμογή (μόνο αν το άνοιξε το AirSense). Κουμπί 🔑 πάνω = on/off. Πρώτη φορά: άνοιξε το Tailscale, login, δώσε άδεια VPN.
 - **MagicDNS** (με όνομα, δεν αλλάζει ποτέ): `http://airsense.tailXXXX.ts.net:8765` — δουλεύει παντού: Android app (πεδίο Tailscale, ή το μαθαίνει μόνο του), AirSense / AirSense Remote (⚙ Settings → 🌍 MagicDNS, διαδρομή «🌍 MagicDNS»), browser, `ssh`. Το δικό σου όνομα: εφαρμογή Tailscale → μηχάνημα **airsense**, ή `airsense status`.
 - **Tailscale SSH** ανοίγει αυτόματα: `ssh ΧΡΗΣΤΗΣ@airsense` από κάθε συσκευή σου στο Tailscale.
 - Στο [admin](https://login.tailscale.com/admin/machines): μηχάνημα **airsense** → ⋯ → **Disable key expiry** (να μη ζητά ξανά login κάθε 6 μήνες).
