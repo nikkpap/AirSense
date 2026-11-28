@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -522,8 +523,9 @@ fun ChartCard(vm: MainViewModel, ui: UiState) {
             }
         }
         Spacer(Modifier.height(4.dp))
+        val ranges = listOf(1 to tr("1ώ", "1h"), 6 to tr("6ώ", "6h"), 24 to tr("24ώ", "24h"), 168 to tr("7 ημ", "7 d"), 720 to tr("30 ημ", "30 d"))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            items(listOf(1 to tr("1ώ", "1h"), 6 to tr("6ώ", "6h"), 24 to tr("24ώ", "24h"), 168 to tr("7 ημ", "7 d"), 720 to tr("30 ημ", "30 d"))) { (h, l) ->
+            items(ranges) { (h, l) ->
                 FilterChip(selected = ui.hours == h, onClick = { vm.setHours(h) }, label = { Text(l) })
             }
         }
