@@ -112,6 +112,17 @@ jobs:
           chmod +x gradlew
           ./gradlew --no-daemon :app:testDebugUnitTest --tests "gr.nikkpap.airsense.ScreensTest"
 
+      - name: Screenshots → branch ci-shots (to review the UI)
+        if: always() && github.event_name != 'pull_request'
+        continue-on-error: true
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd app/build/shots 2>/dev/null || exit 0
+          git init -q && git checkout -q -b ci-shots
+          git add *.png && git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "screenshots ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}" ci-shots
+
       - name: Upload screenshots
         if: always()
         continue-on-error: true
