@@ -49,6 +49,12 @@ android {
             all {
                 it.systemProperties["roborazzi.test.record"] = "true"
                 it.systemProperties["robolectric.pixelCopyRenderMode"] = "hardware"
+                // the Android framework jar comes from Gradle (no download during the test)
+                it.systemProperties["robolectric.offline"] = "true"
+                it.systemProperties["robolectric.usePreinstrumentedJars"] = "false"
+                it.systemProperties["robolectric.dependency.dir"] = layout.buildDirectory.dir("robolectric-deps").get().asFile.absolutePath
+                it.dependsOn("copyRobolectricDeps")
+                it.testLogging { exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL; events("passed", "failed") }
                 it.maxHeapSize = "2g"
             }
         }
@@ -94,4 +100,12 @@ dependencies {
     testImplementation("io.github.takahirom.roborazzi:roborazzi:1.44.0")
     testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.44.0")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+}
+
+// Android 14 framework for Robolectric (screenshot tests)
+val robolectricDeps: Configuration by configurations.creating
+dependencies { robolectricDeps("org.robolectric:android-all:14-robolectric-10818077") }
+tasks.register<Copy>("copyRobolectricDeps") {
+    from(robolectricDeps)
+    into(layout.buildDirectory.dir("robolectric-deps"))
 }
