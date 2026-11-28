@@ -14,8 +14,8 @@ android {
         applicationId = "gr.nikkpap.airsense"
         minSdk = 26
         targetSdk = 36
-        versionCode = 8
-        versionName = "1.5.1"
+        versionCode = 9
+        versionName = "1.5.2"
     }
 
     // Υπογραφή: αν υπάρχει κλειδί (GitHub Secrets / μεταβλητές περιβάλλοντος) → σταθερή υπογραφή για ενημερώσεις,

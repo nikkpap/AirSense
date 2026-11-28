@@ -27,7 +27,7 @@ class Api(private val p: Prefs) {
     }
 
     fun bases(): List<String> {
-        val list = listOf(p.localUrl, p.tsUrl).map { normalize(it) }.filter { it.isNotBlank() }.distinct()
+        val list = listOf(p.localUrl, p.tsUrl, p.magicUrl).map { normalize(it) }.filter { it.isNotBlank() }.distinct()
         val lg = p.lastGood
         return if (lg.isNotBlank() && lg in list) listOf(lg) + list.filter { it != lg } else list
     }

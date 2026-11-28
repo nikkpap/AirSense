@@ -14,7 +14,7 @@ Double-click: installs what it needs (PyQt6, paramiko, qrcode) by itself.
 Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM
 """
 APP_NAME = "AirSense Remote"
-APP_VERSION = "1.6.1"
+APP_VERSION = "1.7.0"
 
 import os
 import sys
@@ -95,7 +95,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QLabel, QPushBu
 CFG_DIR = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~/.config"), APP_NAME)
 CFG_PATH = os.path.join(CFG_DIR, "config.json")
 DEFAULT_CFG = {
-    "lan": "", "mdns": "airsense.local", "tailscale": "",
+    "lan": "", "mdns": "airsense.local", "tailscale": "", "magicdns": "",
     "route": "auto", "user": "pico", "password": "", "port": 22, "web_port": 8765, "pin": "",
     "auto_connect": True, "save_password": True, "geometry": "", "auto_find": True,
 }
@@ -438,7 +438,7 @@ class Bus(QObject):
     status = pyqtSignal(str)
     sensors = pyqtSignal(object)
     find_done = pyqtSignal(str, str)     # result: found / added / none / error, message
-    learned = pyqtSignal(str, str)       # board LAN IP, Tailscale IP
+    learned = pyqtSignal(str, str, str)  # board LAN IP, Tailscale IP, Tailscale MagicDNS name
     open_file = pyqtSignal(str)
 
 
@@ -764,6 +764,8 @@ class SettingsDialog(QDialog):
         self.mdns = QLineEdit(cfg["mdns"])
         self.ts = QLineEdit(cfg["tailscale"])
         self.ts.setPlaceholderText("100.x.x.x (Tailscale)")
+        self.magic = QLineEdit(cfg.get("magicdns", ""))
+        self.magic.setPlaceholderText("airsense.tailXXXX.ts.net (learned by itself)")
         self.user = QLineEdit(cfg["user"])
         self.pw = QLineEdit(cfg.get("_pw", ""))
         self.pw.setEchoMode(QLineEdit.EchoMode.Password)
@@ -789,6 +791,7 @@ class SettingsDialog(QDialog):
         f.addRow("🏠 Local IP (LAN)", lan_row)
         f.addRow("🔤 Name (mDNS)", self.mdns)
         f.addRow("🌍 Tailscale IP", self.ts)
+        f.addRow("🌍 MagicDNS", self.magic)
         f.addRow("👤 User", self.user)
         f.addRow("🔑 Password", self.pw)
         f.addRow("SSH port", self.port)
@@ -851,6 +854,7 @@ class SettingsDialog(QDialog):
     def ok(self):
         c = self.cfg
         c.update(lan=self.lan.text().strip(), mdns=self.mdns.text().strip(), tailscale=self.ts.text().strip(),
+                 magicdns=self.magic.text().strip().rstrip(".").replace("http://", "").split(":")[0].split("/")[0],
                  user=self.user.text().strip() or "pico", port=self.port.value(), web_port=self.web.value(),
                  pin=self.pin.text().strip(), save_password=self.save_pw.isChecked(), auto_connect=self.auto.isChecked())
         c["_pw"] = self.pw.text()
@@ -959,8 +963,8 @@ class Main(QMainWindow):
         t.setObjectName("h1")
         row.addWidget(t)
         self.route = QComboBox()
-        self.route.addItems(["Auto", "🏠 LAN", "🔤 airsense.local", "🌍 Tailscale"])
-        self.route.setCurrentIndex({"auto": 0, "lan": 1, "mdns": 2, "tailscale": 3}.get(self.cfg.get("route"), 0))
+        self.route.addItems(["Auto", "🏠 LAN", "🔤 airsense.local", "🌍 Tailscale", "🌍 MagicDNS"])
+        self.route.setCurrentIndex({"auto": 0, "lan": 1, "mdns": 2, "tailscale": 3, "magicdns": 4}.get(self.cfg.get("route"), 0))
         self.route.currentIndexChanged.connect(self._route_changed)
         self.route.setToolTip("Route: how to reach the board")
         row.addWidget(self.route)
@@ -1272,14 +1276,14 @@ class Main(QMainWindow):
 
     # ── routes ──
     def _route_changed(self, i):
-        self.cfg["route"] = ("auto", "lan", "mdns", "tailscale")[i]
+        self.cfg["route"] = ("auto", "lan", "mdns", "tailscale", "magicdns")[i]
         save_cfg(self.cfg)
         self.refresh_leds()
 
     def _candidates(self):
         r = self.cfg.get("route", "auto")
         if r == "auto":
-            hs = [self.cfg.get("lan"), self.cfg.get("mdns"), self.cfg.get("tailscale")]
+            hs = [self.cfg.get("lan"), self.cfg.get("mdns"), self.cfg.get("tailscale"), self.cfg.get("magicdns")]
         else:
             hs = [self.cfg.get(r)]
         return [h for h in hs if h]
@@ -1340,7 +1344,8 @@ class Main(QMainWindow):
         self.btn_conn.setEnabled(True)
         if ok:
             self._set_connected_ui(True)
-            via = "Tailscale" if host == self.cfg.get("tailscale") else ("LAN" if host == self.cfg.get("lan") else host)
+            via = ("Tailscale" if host == self.cfg.get("tailscale") else "MagicDNS" if host == self.cfg.get("magicdns")
+                   else "LAN" if host == self.cfg.get("lan") else host)
             self.conn_lbl.setText(f"✔ {self.cfg['user']}@{host} ({via})")
             self.led["ssh"].set("ok", f"connected to {host}")
             self._term_sys(f"✔ Connected to {self.cfg['user']}@{host} via {via}")
@@ -1361,18 +1366,25 @@ class Main(QMainWindow):
 
         def job():
             try:
-                _, out = conn.run("hostname -I 2>/dev/null; echo '##'; tailscale ip -4 2>/dev/null", timeout=20)
+                _, out = conn.run("hostname -I 2>/dev/null; echo '##'; tailscale ip -4 2>/dev/null; echo '##'; "
+                                  "tailscale status --self=true --peers=false --json 2>/dev/null | grep -m1 DNSName", timeout=20)
             except Exception:
                 return
-            lan_part, _, ts_part = strip_ansi(out).partition("##")
+            lan_part, _, rest = strip_ansi(out).partition("##")
+            ts_part, _, dns_part = rest.partition("##")
+            m = re.search(r'"DNSName"\s*:\s*"([^"]+?)\.?"', dns_part)
+            magic = m.group(1) if m and ".ts.net" in m.group(1) else ""
             ips = re.findall(r"\b(\d{1,3}(?:\.\d{1,3}){3})\b", lan_part)
             lan = next((i for i in ips if not i.startswith(("100.", "127.", "172.32."))), "")
             ts = next(iter(re.findall(r"\b(100\.\d{1,3}\.\d{1,3}\.\d{1,3})\b", ts_part)), "")
-            self.bus.learned.emit(lan, ts)
+            self.bus.learned.emit(lan, ts, magic)
         threading.Thread(target=job, daemon=True).start()
 
-    def _on_learned(self, lan, ts):
+    def _on_learned(self, lan, ts, magic=""):
         changed = []
+        if magic and magic != self.cfg.get("magicdns"):
+            changed.append(f"MagicDNS → {magic}")
+            self.cfg["magicdns"] = magic
         if lan and lan != self.cfg.get("lan"):
             changed.append(f"local IP {self.cfg.get('lan') or '—'} → {lan}")
             self.cfg["lan"] = lan
@@ -1462,7 +1474,7 @@ class Main(QMainWindow):
                 self.bus.sensors.emit(devs)
             else:
                 res["sensor"] = ("off", "unknown (no web data)")
-            tsh = cfg.get("tailscale")
+            tsh = cfg.get("tailscale") or cfg.get("magicdns")
             if tsh:
                 res["ts"] = ("ok", f"{tsh} answers") if tcp_ok(tsh, wp, 3) or tcp_ok(tsh, cfg["port"], 3) else (
                     "bad", f"{tsh} does not answer — Tailscale ON on this PC?")

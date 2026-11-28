@@ -232,8 +232,8 @@ fun ConnectionForm(vm: MainViewModel, onConnected: () -> Unit = {}) {
     Spacer(Modifier.height(8.dp))
     OutlinedTextField(
         ts, { ts = it }, Modifier.fillMaxWidth(), singleLine = true,
-        label = { Text(tr("Διεύθυνση Tailscale (από παντού)", "Tailscale address (anywhere)")) },
-        placeholder = { Text("http://100.x.y.z:8765") },
+        label = { Text(tr("Tailscale (από παντού): 100.x ή όνομα .ts.net", "Tailscale (anywhere): 100.x or .ts.net name")) },
+        placeholder = { Text("airsense.tailXXXX.ts.net  ή / or  100.x.y.z") },
         leadingIcon = { Icon(Icons.Filled.Public, null) }
     )
     Spacer(Modifier.height(8.dp))

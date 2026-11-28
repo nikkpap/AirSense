@@ -134,7 +134,9 @@ enable_ssh() {
 connected() {
   rm -f "$LOGIN_FILE"
   local T; T=$(tailscale ip -4 2>/dev/null | head -1)
+  local DN; DN=$(tailscale status --peers=false --json 2>/dev/null | grep -m1 -oE '"DNSName": *"[^"]+"' | sed -E 's/.*"([^"]+)"$/\1/; s/\.$//')
   echo "  ✔ Tailscale connected · $T · http://$T:8765"
+  [ -n "$DN" ] && echo "  ✔ MagicDNS: http://$DN:8765  (same, by name — never changes)"
   enable_ssh
 }
 

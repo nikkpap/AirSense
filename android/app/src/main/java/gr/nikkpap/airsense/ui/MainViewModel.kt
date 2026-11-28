@@ -204,7 +204,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun learnUrls(j: org.json.JSONObject) {
         val ts = gr.nikkpap.airsense.data.Discovery.tailscaleUrl(j)
         val lan = gr.nikkpap.airsense.data.Discovery.localUrl(j)
-        if (ts != null && prefs.tsUrl != ts) prefs.tsUrl = ts
+        val magic = gr.nikkpap.airsense.data.Discovery.magicDnsUrl(j)
+        val typedMagic = prefs.tsUrl.contains(".ts.net")          // the user typed the MagicDNS name → keep it
+        if (ts != null && !typedMagic && prefs.tsUrl != ts) prefs.tsUrl = ts
+        if (magic != null && prefs.magicUrl != magic) prefs.magicUrl = magic
+        if (typedMagic && ts != null && prefs.magicUrl != ts) prefs.magicUrl = ts   // then the 100.x IP is the extra fallback
         if (lan != null && prefs.localUrl.isBlank()) prefs.localUrl = lan
     }
 

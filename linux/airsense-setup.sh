@@ -341,6 +341,7 @@ IP=$(hostname -I | awk '{print $1}')
 echo -e "\n${G}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${N}"
 echo -e "  🏠 Local:     ${B}http://$IP:8765${N}   or   ${B}http://$(hostname).local:8765${N}"
 TSIP=$(tailscale ip -4 2>/dev/null | head -1); [ -n "$TSIP" ] && echo -e "  🌍 Tailscale: ${B}http://$TSIP:8765${N}"
+TSDN=$(tailscale status --peers=false --json 2>/dev/null | grep -m1 -oE '"DNSName": *"[^"]+"' | sed -E 's/.*"([^"]+)"$/\1/; s/\.$//'); [ -n "$TSDN" ] && echo -e "  🌍 MagicDNS:  ${B}http://$TSDN:8765${N}"
 echo -e "  📱 QR for the phone: ${B}airsense qr${N}     · status: ${B}airsense${N}"
 echo -e "  🔐 Admin password:   ${B}airsense set-admin${N}  (or ADMIN_PASSWORD in ~/airsense-settings.txt)"
 echo -e "  🔄 Updates: ${B}automatic${N} from GitHub (every 6 hours) · now: ${B}airsense update${N}"

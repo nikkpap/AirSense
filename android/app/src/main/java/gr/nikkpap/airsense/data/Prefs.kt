@@ -19,6 +19,8 @@ class Prefs(ctx: Context) {
     var configured: Boolean get() = bool("configured", false); set(v) = putBool("configured", v)
     var localUrl: String get() = str("localUrl"); set(v) = putStr("localUrl", v)
     var tsUrl: String get() = str("tsUrl"); set(v) = putStr("tsUrl", v)
+    /** Tailscale MagicDNS name (e.g. http://airsense.tailXXXX.ts.net:8765) — learned from the server, extra fallback */
+    var magicUrl: String get() = str("magicUrl"); set(v) = putStr("magicUrl", v)
     var pin: String get() = str("pin"); set(v) = putStr("pin", v)
     var lastGood: String get() = str("lastGood"); set(v) = putStr("lastGood", v)
 

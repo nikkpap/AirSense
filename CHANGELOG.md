@@ -1,5 +1,13 @@
 # Αλλαγές — AirSense
 
+## v1.7.5 · AirSense Remote v1.7.0 · Android v1.5.2 — Tailscale MagicDNS παντού
+- **Android:** δέχεται όνομα MagicDNS (`airsense.tailXXXX.ts.net`) στο πεδίο Tailscale· το μαθαίνει και μόνο του από τον server
+  και το δοκιμάζει ως επιπλέον διαδρομή (τοπικό → Tailscale → MagicDNS). Ισχύει και για widget / ειδοποιήσεις.
+- **AirSense Remote / καρτέλα 🛰 Πλακέτα:** νέο πεδίο **🌍 MagicDNS** στο ⚙ Settings (το μαθαίνει μόνο του από την πλακέτα),
+  διαδρομή «🌍 MagicDNS», και στο Auto.
+- **Πλακέτα:** `airsense status`, `airsense qr`, `airsense tailscale` και ο installer δείχνουν και τη διεύθυνση MagicDNS.
+- **PDF οδηγός κινητού:** κάτω από το QR του Tailscale γράφει και το όνομα MagicDNS.
+
 ## v1.7.4 — 🛰 Στείλε τις ρυθμίσεις email στην πλακέτα
 - ⚙ Ρυθμίσεις → Email: κουμπί **🛰 Στείλε τις ρυθμίσεις στην πλακέτα (Luckfox / Pi)** → η πλακέτα στέλνει μόνη της
   ημερήσια αναφορά + ειδοποιήσεις ορίων, 24/7 χωρίς ανοιχτό PC. Στέλνει λογαριασμό (Google κωδικός εφαρμογής ή σύνδεση

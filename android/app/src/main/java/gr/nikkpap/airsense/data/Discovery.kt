@@ -80,6 +80,16 @@ object Discovery {
         return null
     }
 
+    /** From /api/status "urls": the Tailscale MagicDNS name (name.tailXXXX.ts.net), if any. */
+    fun magicDnsUrl(status: JSONObject): String? {
+        val arr = status.optJSONArray("urls") ?: return null
+        for (i in 0 until arr.length()) {
+            val u = arr.optJSONObject(i)?.optString("url") ?: continue
+            if (Regex("""^https?://[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.ts\.net(:\d+)?$""").matches(u)) return u
+        }
+        return null
+    }
+
     fun localUrl(status: JSONObject): String? {
         val arr = status.optJSONArray("urls") ?: return null
         for (i in 0 until arr.length()) {

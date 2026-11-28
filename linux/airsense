@@ -72,7 +72,8 @@ case "${1:-status}" in
       TSST=$(tailscale status --json 2>/dev/null | grep -m1 -oE '"BackendState": *"[A-Za-z]+"' | grep -oE '[A-Za-z]+"$' | tr -d '"')
       systemctl is-active --quiet tailscaled && okk "tailscaled" "running$(grep -q userspace-networking /etc/default/tailscaled 2>/dev/null && echo ' (userspace mode)')" || bad "tailscaled" "not running → airsense tailscale"
       case "$TSST" in
-        Running)    TIP=$(tailscale ip -4 2>/dev/null | head -1); okk "state" "connected → http://$TIP:8765" ;;
+        Running)    TIP=$(tailscale ip -4 2>/dev/null | head -1); okk "state" "connected → http://$TIP:8765"
+                    TDN=$(tailscale status --peers=false --json 2>/dev/null | grep -m1 -oE '"DNSName": *"[^"]+"' | sed -E 's/.*"([^"]+)"$/\1/; s/\.$//'); [ -n "$TDN" ] && okk "MagicDNS" "http://$TDN:8765" ;;
         NeedsLogin) bad "state" "needs login → airsense tailscale" ;;
         Stopped)    bad "state" "stopped → airsense tailscale" ;;
         *)          wrn "state" "${TSST:-unknown}" ;;
@@ -104,7 +105,8 @@ case "${1:-status}" in
     [ $PROBLEMS = 0 ] && printf "${G}✔ All good${N}\n" || printf "${R}✖ %d problem(s) above${N} — details: ${B}airsense logs${N}\n" $PROBLEMS ;;
   qr)       command -v qrencode >/dev/null || sudo apt-get install -y -qq qrencode
             echo "🏠 http://$(ip_):8765"; qrencode -t ANSIUTF8 "http://$(ip_):8765"
-            if tailscale ip -4 >/dev/null 2>&1; then T="http://$(tailscale ip -4 | head -1):8765"; echo "🌍 $T"; qrencode -t ANSIUTF8 "$T"; fi ;;
+            if tailscale ip -4 >/dev/null 2>&1; then T="http://$(tailscale ip -4 | head -1):8765"; echo "🌍 $T"; qrencode -t ANSIUTF8 "$T"
+              TDN=$(tailscale status --peers=false --json 2>/dev/null | grep -m1 -oE '"DNSName": *"[^"]+"' | sed -E 's/.*"([^"]+)"$/\1/; s/\.$//'); [ -n "$TDN" ] && echo "🌍 MagicDNS: http://$TDN:8765"; fi ;;
   logs)     sudo journalctl -u airsense-boot -n 60 --no-pager; echo; sudo tail -n 30 $DATA/boot.log
             echo; echo "── Tailscale ──"; sudo tail -n 15 $DATA/tailscale.log 2>/dev/null ;;
   live)     sudo journalctl -u airsense-boot -f ;;
