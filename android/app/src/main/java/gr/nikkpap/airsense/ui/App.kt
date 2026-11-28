@@ -212,7 +212,7 @@ fun SectionTitle(text: String) {
 fun HCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Card(
         modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest, contentColor = MaterialTheme.colorScheme.onSurface),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column(Modifier.padding(16.dp), content = content)
@@ -303,14 +303,14 @@ fun ConnectionForm(vm: MainViewModel, onConnected: () -> Unit = {}) {
     Spacer(Modifier.height(8.dp))
     OutlinedTextField(
         ts, { ts = it }, Modifier.fillMaxWidth(), singleLine = true,
-        label = { Text(tr("Tailscale (από παντού): 100.x ή όνομα .ts.net", "Tailscale (anywhere): 100.x or .ts.net name")) },
-        placeholder = { Text("airsense.tailXXXX.ts.net  ή / or  100.x.y.z") },
+        label = { Text(tr("Tailscale (από παντού)", "Tailscale (anywhere)")) },
+        placeholder = { Text("airsense.tailXXXX.ts.net · 100.x.y.z") },
         leadingIcon = { Icon(Icons.Filled.Public, null) }
     )
     Spacer(Modifier.height(8.dp))
     OutlinedTextField(
         pin, { pin = it }, Modifier.fillMaxWidth(), singleLine = true,
-        label = { Text(tr("PIN (αν έχει οριστεί στον υπολογιστή)", "PIN (if set on PC)")) },
+        label = { Text(tr("PIN (αν υπάρχει)", "PIN (if set)")) },
         visualTransformation = PasswordVisualTransformation(),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
         leadingIcon = { Icon(Icons.Filled.Lock, null) }
@@ -417,7 +417,6 @@ fun HomeScreen(vm: MainViewModel, ui: UiState, onOpenSettings: () -> Unit = {}) 
     PullToRefreshBox(isRefreshing = ui.refreshing, onRefresh = { vm.refreshNow() }, modifier = Modifier.fillMaxSize()) {
         ResponsiveGrid {
             if (ui.online == false) full("offline") { OfflineCard(vm, ui, onOpenSettings) }
-            ui.weather?.let { w -> if (w.enabled && w.current != null) item(key = "wx") { WeatherCard(w) } }
             if (st != null && st.devices.isEmpty()) {
                 full("empty") {
                     HCard {
@@ -438,6 +437,7 @@ fun HomeScreen(vm: MainViewModel, ui: UiState, onOpenSettings: () -> Unit = {}) 
             items(st?.devices ?: emptyList(), key = { it.id }) { d ->
                 DeviceCard(d, d.id == ui.selected && (st?.devices?.size ?: 0) > 1, en, ui.weather) { vm.select(d.id) }
             }
+            ui.weather?.let { w -> if (w.enabled && w.current != null) item(key = "wx") { WeatherCard(w) } }
             if (st != null && st.devices.isNotEmpty()) {
                 full("chart") { ChartCard(vm, ui) }
                 full("actions") {
@@ -464,7 +464,7 @@ fun OfflineCard(vm: MainViewModel, ui: UiState, onOpenSettings: () -> Unit) {
     val bad = BadC
     Card(
         Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = bad.copy(alpha = 0.10f)),
+        colors = CardDefaults.cardColors(containerColor = bad.copy(alpha = 0.10f), contentColor = MaterialTheme.colorScheme.onSurface),
         border = BorderStroke(1.dp, bad.copy(alpha = 0.45f))
     ) {
         Column(Modifier.padding(16.dp)) {
@@ -582,7 +582,7 @@ private fun SmallStat(modifier: Modifier, label: String, value: String) {
 fun DeviceCard(d: Device, selected: Boolean, en: Boolean, w: Weather? = null, onClick: () -> Unit) {
     Card(
         Modifier.fillMaxWidth().clickable { onClick() }, shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest, contentColor = MaterialTheme.colorScheme.onSurface),
         border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) Brand else MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column(Modifier.padding(16.dp)) {
