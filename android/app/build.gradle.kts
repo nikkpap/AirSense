@@ -104,7 +104,10 @@ dependencies {
 
 // Android 14 framework for Robolectric (screenshot tests)
 val robolectricDeps: Configuration by configurations.creating
-dependencies { robolectricDeps("org.robolectric:android-all:14-robolectric-10818077") }
+dependencies {
+    robolectricDeps("org.robolectric:android-all:14-robolectric-10818077")
+    robolectricDeps("org.robolectric:android-all:15-robolectric-12650502")
+}
 tasks.register<Copy>("copyRobolectricDeps") {
     from(robolectricDeps)
     into(layout.buildDirectory.dir("robolectric-deps"))
