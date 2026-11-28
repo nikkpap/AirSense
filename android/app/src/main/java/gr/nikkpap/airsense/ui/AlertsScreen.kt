@@ -9,8 +9,6 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -82,9 +80,9 @@ fun AlertsScreen(vm: MainViewModel, ui: UiState) {
         vm.say(vm.t("Τα όρια αποθηκεύτηκαν", "Limits saved"))
     }
 
-    LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    ResponsiveGrid {
         if (!canPost) {
-            item {
+            full("perm") {
                 HCard {
                     Text(tr("🔕 Οι ειδοποιήσεις είναι κλειστές", "🔕 Notifications are off"), fontWeight = FontWeight.Bold, color = WarnC)
                     Spacer(Modifier.height(6.dp))
@@ -190,17 +188,24 @@ fun AlertsScreen(vm: MainViewModel, ui: UiState) {
                 )
             }
         }
-        item { SectionTitle(tr("Συμβάντα υπολογιστή", "PC events")) }
+        full("evt") { SectionTitle(tr("Συμβάντα υπολογιστή", "PC events")) }
         val evs = ui.status?.log?.reversed() ?: emptyList()
-        items(evs) { e ->
-            val col = when (e.level) {
-                "warn" -> WarnC; "err" -> BadC; else -> MaterialTheme.colorScheme.onSurface
+        full("events") {
+            HCard {
+                if (evs.isEmpty()) Text("—", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                evs.take(60).forEachIndexed { i, e ->
+                    val col = when (e.level) {
+                        "warn" -> WarnC; "err" -> BadC; else -> MaterialTheme.colorScheme.onSurface
+                    }
+                    if (i > 0) HorizontalDivider(Modifier.padding(vertical = 5.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                    Row {
+                        Text(SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()).format(Date((e.ts * 1000).toLong())),
+                            fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(78.dp))
+                        Text(e.msg, fontSize = 12.sp, color = col)
+                    }
+                }
             }
-            Text(
-                SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()).format(Date((e.ts * 1000).toLong())) + "  " + e.msg,
-                fontSize = 12.sp, color = col, modifier = Modifier.padding(horizontal = 4.dp)
-            )
         }
-        item { Spacer(Modifier.height(12.dp)) }
+        full("end") { Spacer(Modifier.height(12.dp)) }
     }
 }

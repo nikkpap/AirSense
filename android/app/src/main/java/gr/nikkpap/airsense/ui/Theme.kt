@@ -24,14 +24,31 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 val Brand = Color(0xFF2B6CFF)
-val TempC = Color(0xFFFF9F43)
-val HumC = Color(0xFF3FA7FF)
-val DewC = Color(0xFFA78BFA)
-val OutTC = Color(0xFF2ECC71)
-val OutHC = Color(0xFF1ABC9C)
-val OkC = Color(0xFF2ECC71)
-val BadC = Color(0xFFFF5C5C)
-val WarnC = Color(0xFFFFC04D)
+
+/** Data colours, tuned per theme so small text stays readable (contrast) on light and dark cards. */
+data class DataColors(
+    val temp: Color, val hum: Color, val dew: Color, val outT: Color, val outH: Color,
+    val ok: Color, val bad: Color, val warn: Color,
+)
+
+val DarkData = DataColors(
+    temp = Color(0xFFFFA552), hum = Color(0xFF4DB0FF), dew = Color(0xFFB39DFF), outT = Color(0xFF3DD68C),
+    outH = Color(0xFF2CC9AE), ok = Color(0xFF3DD68C), bad = Color(0xFFFF6B6B), warn = Color(0xFFFFC857),
+)
+val LightData = DataColors(
+    temp = Color(0xFFC25E00), hum = Color(0xFF0B6FC7), dew = Color(0xFF6A4BD6), outT = Color(0xFF13804A),
+    outH = Color(0xFF0B7F6C), ok = Color(0xFF13804A), bad = Color(0xFFC62828), warn = Color(0xFF8A5A00),
+)
+val LocalData = staticCompositionLocalOf { DarkData }
+
+val TempC: Color @Composable @ReadOnlyComposable get() = LocalData.current.temp
+val HumC: Color @Composable @ReadOnlyComposable get() = LocalData.current.hum
+val DewC: Color @Composable @ReadOnlyComposable get() = LocalData.current.dew
+val OutTC: Color @Composable @ReadOnlyComposable get() = LocalData.current.outT
+val OutHC: Color @Composable @ReadOnlyComposable get() = LocalData.current.outH
+val OkC: Color @Composable @ReadOnlyComposable get() = LocalData.current.ok
+val BadC: Color @Composable @ReadOnlyComposable get() = LocalData.current.bad
+val WarnC: Color @Composable @ReadOnlyComposable get() = LocalData.current.warn
 
 private val DarkScheme = darkColorScheme(
     primary = Brand, onPrimary = Color.White,
@@ -48,9 +65,16 @@ private val DarkScheme = darkColorScheme(
 
 private val LightScheme = lightColorScheme(
     primary = Brand, onPrimary = Color.White,
-    background = Color(0xFFF5F7FB), surface = Color(0xFFF5F7FB),
+    primaryContainer = Color(0xFFDCE6FF), onPrimaryContainer = Color(0xFF0B2A6B),
+    secondaryContainer = Color(0xFFE2E9F7), onSecondaryContainer = Color(0xFF1B2A45),
+    background = Color(0xFFF3F5F9), onBackground = Color(0xFF141A24),
+    surface = Color(0xFFF3F5F9), onSurface = Color(0xFF141A24),
+    surfaceVariant = Color(0xFFE6EBF3), onSurfaceVariant = Color(0xFF4A5568),
+    surfaceContainerLowest = Color(0xFFFFFFFF), surfaceContainerLow = Color(0xFFF8F9FC),
     surfaceContainer = Color(0xFFFFFFFF), surfaceContainerHigh = Color(0xFFFFFFFF),
-    surfaceContainerHighest = Color(0xFFEDF1F8),
+    surfaceContainerHighest = Color(0xFFFFFFFF),
+    outline = Color(0xFF8A94A6), outlineVariant = Color(0xFFD9DFEA),
+    error = Color(0xFFC62828),
 )
 
 /** «time» mode: dark from 20:00 to 07:00 */
@@ -87,13 +111,17 @@ fun HygroTheme(theme: String, dynamic: Boolean, content: @Composable () -> Unit)
             w.decorView.setBackgroundColor(scheme.background.toArgb())
         }
     }
-    MaterialTheme(colorScheme = scheme, content = content)
+    androidx.compose.runtime.CompositionLocalProvider(LocalData provides if (dark) DarkData else LightData, LocalDark provides dark) {
+        MaterialTheme(colorScheme = scheme, content = content)
+    }
 }
 
 /** next theme for the quick toggle: system → time → dark → light → system */
 fun nextTheme(t: String): String = when (t) {
     "system" -> "time"; "time" -> "dark"; "dark" -> "light"; else -> "system"
 }
+
+val LocalDark = staticCompositionLocalOf { true }
 
 /** Γλώσσα: Ελληνικά / English */
 val LocalEn = staticCompositionLocalOf { false }

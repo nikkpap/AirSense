@@ -14,8 +14,8 @@ android {
         applicationId = "gr.nikkpap.airsense"
         minSdk = 26
         targetSdk = 36
-        versionCode = 9
-        versionName = "1.5.2"
+        versionCode = 10
+        versionName = "1.6.0"
     }
 
     // Υπογραφή: αν υπάρχει κλειδί (GitHub Secrets / μεταβλητές περιβάλλοντος) → σταθερή υπογραφή για ενημερώσεις,
@@ -42,6 +42,16 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+    }
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            all {
+                it.systemProperties["roborazzi.test.record"] = "true"
+                it.systemProperties["robolectric.pixelCopyRenderMode"] = "hardware"
+                it.maxHeapSize = "2g"
+            }
+        }
     }
     buildFeatures {
         compose = true
@@ -74,4 +84,14 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     // Σκανάρισμα QR χωρίς άδεια κάμερας (Google Play services)
     implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
+
+    // Screenshot tests (Robolectric + Roborazzi) — UI check in GitHub Actions, not in the APK
+    testImplementation(composeBom)
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("androidx.test:core-ktx:1.6.1")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.44.0")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.44.0")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

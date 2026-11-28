@@ -52,6 +52,14 @@ data class UiState(
     val updateChecking: Boolean = false,
     val updateMsg: String? = null,
     val autoUpdate: Boolean = true,
+    // connection / Tailscale
+    val route: String? = null,              // "local" · "tailscale" · null
+    val lastOk: Long = 0L,                  // last successful refresh (ms)
+    val refreshing: Boolean = false,
+    val tsInstalled: Boolean = false,
+    val tsVpn: Boolean = false,
+    val tsAuto: String = "smart",           // smart · always · off
+    val tsAutoOff: Boolean = true,
 )
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -61,7 +69,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _ui = MutableStateFlow(
         UiState(
             configured = prefs.configured, en = prefs.lang == "en", theme = prefs.theme, dynamic = prefs.dynamic,
-            hours = prefs.hours, selected = prefs.selected.ifBlank { null }, autoUpdate = prefs.autoUpdateCheck
+            hours = prefs.hours, selected = prefs.selected.ifBlank { null }, autoUpdate = prefs.autoUpdateCheck,
+            tsAuto = prefs.tsAuto, tsAutoOff = prefs.tsAutoOff
         )
     )
     val ui: StateFlow<UiState> = _ui.asStateFlow()
@@ -101,8 +110,95 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setForeground(f: Boolean) {
         foreground = f
-        if (f && _ui.value.configured) viewModelScope.launch { refresh(true) }
+        if (f) {
+            tsOffJob?.cancel()
+            viewModelScope.launch {
+                autoTailscale()
+                if (_ui.value.configured) refresh(true)
+            }
+        } else scheduleTailscaleOff()
     }
+
+    // ═════════ Tailscale: on when the app opens (if needed), off when you leave ═════════
+    private var tsStartedByUs = false
+    private var tsOffJob: Job? = null
+
+    fun updateTs() {
+        val ctx = getApplication<Application>()
+        update { it.copy(tsInstalled = gr.nikkpap.airsense.data.TailscaleCtl.installed(ctx),
+            tsVpn = gr.nikkpap.airsense.data.TailscaleCtl.vpnOn(ctx)) }
+    }
+
+    private suspend fun autoTailscale() {
+        val ctx = getApplication<Application>()
+        val ts = gr.nikkpap.airsense.data.TailscaleCtl
+        updateTs()
+        if (prefs.tsAuto == "off" || !_ui.value.configured || !_ui.value.tsInstalled || _ui.value.tsVpn) return
+        if (prefs.tsUrl.isBlank() && prefs.magicUrl.isBlank()) return            // no Tailscale address → nothing to do
+        if (prefs.tsAuto == "smart" && ts.reachable(api.normalize(prefs.localUrl))) return   // same WiFi → not needed
+        startTailscale()
+    }
+
+    private suspend fun startTailscale() {
+        val ctx = getApplication<Application>()
+        val ts = gr.nikkpap.airsense.data.TailscaleCtl
+        if (!ts.connect(ctx)) return
+        tsStartedByUs = true
+        say(t("🌍 Ενεργοποίηση Tailscale…", "🌍 Turning Tailscale on…"))
+        repeat(10) {
+            delay(1000)
+            if (ts.vpnOn(ctx)) {
+                updateTs()
+                prefs.lastGood = ""
+                refresh(true)
+                return
+            }
+        }
+        updateTs()
+        say(t("Το Tailscale δεν άνοιξε — άνοιξέ το μία φορά από την εφαρμογή του (σύνδεση + άδεια VPN)",
+            "Tailscale did not start — open its app once (log in + allow VPN)"))
+    }
+
+    private fun scheduleTailscaleOff() {
+        if (!tsStartedByUs || !prefs.tsAutoOff || prefs.liveEnabled) return
+        tsOffJob = viewModelScope.launch {
+            delay(5000)                       // short grace time (e.g. a quick look at another app)
+            if (!foreground) stopTailscaleIfOurs()
+        }
+    }
+
+    private fun stopTailscaleIfOurs() {
+        if (tsStartedByUs && prefs.tsAutoOff && !prefs.liveEnabled) {
+            gr.nikkpap.airsense.data.TailscaleCtl.disconnect(getApplication())
+            tsStartedByUs = false
+        }
+    }
+
+    /** App closed (swiped away / back) → Tailscale off immediately if AirSense turned it on. */
+    override fun onCleared() {
+        stopTailscaleIfOurs()
+        super.onCleared()
+    }
+
+    /** Button in the top bar: Tailscale on ↔ off */
+    fun toggleTailscale(): Job = viewModelScope.launch {
+        val ctx = getApplication<Application>()
+        val ts = gr.nikkpap.airsense.data.TailscaleCtl
+        updateTs()
+        when {
+            !_ui.value.tsInstalled -> ts.openApp(ctx)
+            _ui.value.tsVpn -> {
+                ts.disconnect(ctx)
+                tsStartedByUs = false
+                say(t("Tailscale: απενεργοποίηση", "Tailscale: off"))
+                delay(1500); updateTs(); prefs.lastGood = ""; refresh(true)
+            }
+            else -> startTailscale()
+        }
+    }
+
+    fun setTsAuto(m: String) { prefs.tsAuto = m; update { it.copy(tsAuto = m) } }
+    fun setTsAutoOff(v: Boolean) { prefs.tsAutoOff = v; update { it.copy(tsAutoOff = v) } }
 
     suspend fun refresh(silent: Boolean = false) {
         try {
@@ -111,7 +207,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             learnUrls(sj)
             var sel = _ui.value.selected
             if (sel == null || st.devices.none { it.id == sel }) sel = st.devices.firstOrNull()?.id
-            update { it.copy(status = st, online = true, error = null, selected = sel) }
+            val lg = prefs.lastGood
+            val route = when {
+                lg.isBlank() -> null
+                lg == api.normalize(prefs.localUrl) -> "local"
+                isTailscaleHost(lg) -> "tailscale"
+                else -> "local"
+            }
+            update { it.copy(status = st, online = true, error = null, selected = sel, route = route,
+                lastOk = System.currentTimeMillis()) }
             runCatching { gr.nikkpap.airsense.widget.AirSenseWidget.save(getApplication(), st) }
             val now = System.currentTimeMillis()
             if (now - lastWx > 5 * 60_000L) {
@@ -120,7 +224,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             if (now - lastHist > 60_000L) loadHistory()
         } catch (e: Exception) {
-            update { it.copy(online = false, error = e.message) }
+            update { it.copy(online = false, error = e.message, route = null) }
             if (!silent) say(t("Σφάλμα: ", "Error: ") + e.message)
         }
     }
@@ -128,8 +232,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun refreshNow(): Job = viewModelScope.launch {
         lastWx = 0
         lastHist = 0
-        refresh(false)
+        update { it.copy(refreshing = true) }
+        try { refresh(false) } finally { update { it.copy(refreshing = false) } }
+        updateTs()
     }
+
+    /** For screenshot tests only: show a prepared state. */
+    @androidx.annotation.VisibleForTesting
+    fun setStateForTest(s: UiState) { _ui.value = s }
 
     suspend fun loadHistory() {
         val sel = _ui.value.selected ?: return

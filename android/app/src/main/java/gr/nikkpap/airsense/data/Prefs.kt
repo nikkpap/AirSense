@@ -54,6 +54,12 @@ class Prefs(ctx: Context) {
     var lastWxFetch: Long get() = sp.getLong("lastWxFetch", 0L); set(v) = sp.edit().putLong("lastWxFetch", v).apply()
     var cachedWx: String get() = str("cachedWx"); set(v) = putStr("cachedWx", v)
 
+    // ── Tailscale ──
+    /** smart = only when the board is not on this WiFi · always · off */
+    var tsAuto: String get() = str("tsAuto", "smart"); set(v) = putStr("tsAuto", v)
+    /** turn Tailscale off again when leaving the app (only if AirSense turned it on) */
+    var tsAutoOff: Boolean get() = bool("tsAutoOff", true); set(v) = putBool("tsAutoOff", v)
+
     // ── OTA ──
     var autoUpdateCheck: Boolean get() = bool("autoUpdateCheck", true); set(v) = putBool("autoUpdateCheck", v)
     var lastUpdateCheck: Long get() = sp.getLong("lastUpdateCheck", 0L); set(v) = sp.edit().putLong("lastUpdateCheck", v).apply()

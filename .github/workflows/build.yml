@@ -106,6 +106,24 @@ jobs:
             echo "ℹ Δεν υπάρχει AIRSENSE_KEYSTORE_B64 → υπογραφή debug"
           fi
 
+      - name: Screenshots (Robolectric — UI check, does not block the APK)
+        continue-on-error: true
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon :app:testDebugUnitTest --tests "gr.nikkpap.airsense.ScreensTest"
+
+      - name: Upload screenshots
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-screenshots
+          path: |
+            android/app/build/shots/*.png
+            android/app/build/reports/tests/testDebugUnitTest/
+          retention-days: 7
+          if-no-files-found: ignore
+
       - name: Build APK
         env:
           AIRSENSE_KEYSTORE_PASSWORD: ${{ secrets.AIRSENSE_KEYSTORE_PASSWORD }}

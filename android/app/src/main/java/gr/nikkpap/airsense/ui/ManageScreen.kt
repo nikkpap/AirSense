@@ -4,8 +4,7 @@ package gr.nikkpap.airsense.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -34,11 +33,11 @@ fun ManageScreen(vm: MainViewModel, ui: UiState) {
     var wifi by remember { mutableStateOf<Device?>(null) }
     var remove by remember { mutableStateOf<Device?>(null) }
     var adminOpen by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { vm.loadConfig() }
+    LaunchedEffect(Unit) { if (ui.config == null) vm.loadConfig() }
 
-    LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    ResponsiveGrid {
         // ── υπολογιστής ──
-        item {
+        full("pc") {
             HCard {
                 Text("💻 AirSense ${st?.version ?: ""}", fontWeight = FontWeight.Bold)
                 Text(vm.api.currentBase(), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -58,19 +57,20 @@ fun ManageScreen(vm: MainViewModel, ui: UiState) {
             }
         }
         // ── συσκευές ──
-        item { SectionTitle(tr("Αισθητήρες", "Sensors")) }
+        full("s1") { SectionTitle(tr("Αισθητήρες", "Sensors")) }
         items(st?.devices ?: emptyList(), key = { it.id }) { d ->
             HCard {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(d.name, fontWeight = FontWeight.Bold)
-                        Text("${d.ip} · ${d.type} · ${f(d.t)}°C ${f(d.h)}%", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(d.name, fontWeight = FontWeight.Bold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        Text("${d.ip} · ${d.type}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                        Text("${f(d.t)}°C · ${f(d.h)}%", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     }
                     Switch(checked = d.enabled, onCheckedChange = { on ->
                         vm.post("/api/device", JSONObject().put("id", d.id).put("enabled", on))
                     })
                 }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     AssistChip(onClick = { rename = d }, label = { Text(tr("Μετονομασία", "Rename")) }, leadingIcon = { Icon(Icons.Filled.Edit, null) })
                     AssistChip(onClick = { wifi = d }, label = { Text(tr("Αλλαγή WiFi", "Change WiFi")) }, leadingIcon = { Icon(Icons.Filled.Wifi, null) })
                     AssistChip(onClick = { remove = d }, label = { Text(tr("Αφαίρεση", "Remove")) }, leadingIcon = { Icon(Icons.Filled.Delete, null) })
@@ -78,14 +78,13 @@ fun ManageScreen(vm: MainViewModel, ui: UiState) {
             }
         }
         // ── καιρός ──
-        item { SectionTitle(tr("Καιρός (Open-Meteo)", "Weather (Open-Meteo)")) }
-        item { WeatherLocationCard(vm, ui) }
+        full("s2") { SectionTitle(tr("Καιρός · Ρυθμίσεις server", "Weather · Server settings")) }
+        item(key = "wx") { WeatherLocationCard(vm, ui) }
         // ── ρυθμίσεις υπολογιστή ──
-        item { SectionTitle(tr("Ρυθμίσεις υπολογιστή", "PC settings")) }
-        item { PcSettingsCard(vm, ui) }
+        item(key = "pcs") { PcSettingsCard(vm, ui) }
         // ── διαχειριστής ──
-        item { SectionTitle(tr("Διαχειριστής", "Administrator")) }
-        item {
+        full("s4") { SectionTitle(tr("Διαχειριστής", "Administrator")) }
+        item(key = "adm") {
             HCard {
                 Text(tr("🔐 Βαθμονόμηση μετρήσεων", "🔐 Measurement calibration"), fontWeight = FontWeight.Bold)
                 Text(
@@ -97,7 +96,7 @@ fun ManageScreen(vm: MainViewModel, ui: UiState) {
                 Button(onClick = { adminOpen = true }) { Icon(Icons.Filled.Lock, null); Spacer(Modifier.width(6.dp)); Text(tr("Άνοιγμα", "Open")) }
             }
         }
-        item { Spacer(Modifier.height(12.dp)) }
+        full("end") { Spacer(Modifier.height(12.dp)) }
     }
 
     rename?.let { d -> RenameDialog(vm, d) { rename = null } }

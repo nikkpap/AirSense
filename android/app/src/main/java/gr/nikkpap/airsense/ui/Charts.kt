@@ -68,6 +68,8 @@ fun HygroChart(points: List<HistPoint>, wx: List<WxPoint>, modifier: Modifier = 
     val labelC = MaterialTheme.colorScheme.onSurfaceVariant
     val tipBg = MaterialTheme.colorScheme.surfaceVariant
     val tipFg = MaterialTheme.colorScheme.onSurface
+    val cT = TempC; val cH = HumC; val cOT = OutTC; val cOH = OutHC; val cD = DewC
+    val chartH = if (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 600) 320.dp else 260.dp
     val lOut = outLabel ?: tr("Έξω", "Out")
     val lDew = tr("Δρόσος", "Dew")
     val lEmpty = tr("Δεν υπάρχουν δεδομένα για το διάστημα", "No data for this period")
@@ -87,7 +89,7 @@ fun HygroChart(points: List<HistPoint>, wx: List<WxPoint>, modifier: Modifier = 
     Canvas(
         modifier
             .fillMaxWidth()
-            .height(290.dp)
+            .height(chartH)
             .onSizeChanged { widthPx = it.width.toFloat() }
             .pointerInput(points) { detectTapGestures { o -> pick(o.x) } }
             .pointerInput(points) { detectHorizontalDragGestures { change, _ -> pick(change.position.x) } }
@@ -116,9 +118,9 @@ fun HygroChart(points: List<HistPoint>, wx: List<WxPoint>, modifier: Modifier = 
         for (i in 0..5) {
             val y = top + ph * i / 5f
             drawLine(grid, Offset(padL, y), Offset(padL + pw, y), 1f)
-            val tl = tm.measure(String.format(Locale.US, "%.1f", t1 - (t1 - t0) * i / 5.0), small.copy(color = TempC))
+            val tl = tm.measure(String.format(Locale.US, "%.1f", t1 - (t1 - t0) * i / 5.0), small.copy(color = cT))
             drawText(tl, topLeft = Offset(padL - tl.size.width - 4f, y - tl.size.height / 2f))
-            val hl = tm.measure(String.format(Locale.US, "%.0f", h1 - (h1 - h0) * i / 5.0), small.copy(color = HumC))
+            val hl = tm.measure(String.format(Locale.US, "%.0f", h1 - (h1 - h0) * i / 5.0), small.copy(color = cH))
             drawText(hl, topLeft = Offset(padL + pw + 4f, y - hl.size.height / 2f))
         }
         val span = x1 - x0
@@ -164,15 +166,15 @@ fun HygroChart(points: List<HistPoint>, wx: List<WxPoint>, modifier: Modifier = 
             )
         }
         val sw = 2.2.dp.toPx()
-        series(w.map { it.ts to it.t }, ::yT, OutTC, 1.6.dp.toPx(), true)
-        series(w.map { it.ts to it.h }, ::yH, OutHC, 1.6.dp.toPx(), true)
-        series(points.map { it.ts to it.dp }, ::yT, DewC, 1.3.dp.toPx(), true)
-        series(points.map { it.ts to it.h }, ::yH, HumC, sw, false)
-        series(points.map { it.ts to it.t }, ::yT, TempC, sw, false)
+        series(w.map { it.ts to it.t }, ::yT, cOT, 1.6.dp.toPx(), true)
+        series(w.map { it.ts to it.h }, ::yH, cOH, 1.6.dp.toPx(), true)
+        series(points.map { it.ts to it.dp }, ::yT, cD, 1.3.dp.toPx(), true)
+        series(points.map { it.ts to it.h }, ::yH, cH, sw, false)
+        series(points.map { it.ts to it.t }, ::yT, cT, sw, false)
         if (valid.size < 40) {
             for (p in valid) {
-                p.t?.let { drawCircle(TempC, 3.dp.toPx(), Offset(xOf(p.ts), yT(it))) }
-                p.h?.let { drawCircle(HumC, 3.dp.toPx(), Offset(xOf(p.ts), yH(it))) }
+                p.t?.let { drawCircle(cT, 3.dp.toPx(), Offset(xOf(p.ts), yT(it))) }
+                p.h?.let { drawCircle(cH, 3.dp.toPx(), Offset(xOf(p.ts), yH(it))) }
             }
         }
 

@@ -10,6 +10,11 @@
     <!-- OTA: install a newer AirSense APK from GitHub Releases -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <!-- Tailscale on/off from AirSense (package visibility, Android 11+) -->
+    <queries>
+        <package android:name="com.tailscale.ipn" />
+    </queries>
+
     <application
         android:name=".HygroApp"
         android:allowBackup="true"

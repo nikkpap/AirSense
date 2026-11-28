@@ -34,7 +34,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onStop() {
-        vm.setForeground(false)
+        if (!isChangingConfigurations) vm.setForeground(false)   // rotation is not "leaving the app"
         super.onStop()
     }
 }

@@ -4,7 +4,14 @@ package gr.nikkpap.airsense.ui
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -59,9 +66,16 @@ fun App(vm: MainViewModel) {
     }
 }
 
+/** Tablet / foldable / landscape: side rail + several columns. */
 @Composable
-fun MainScaffold(vm: MainViewModel, ui: UiState) {
-    var tab by rememberSaveable { mutableIntStateOf(0) }
+@ReadOnlyComposable
+fun isWide(): Boolean = LocalConfiguration.current.screenWidthDp >= 600
+
+private data class NavItem(val icon: androidx.compose.ui.graphics.vector.ImageVector, val label: String)
+
+@Composable
+fun MainScaffold(vm: MainViewModel, ui: UiState, startTab: Int = 0) {
+    var tab by rememberSaveable { mutableIntStateOf(startTab) }
     val snack = remember { SnackbarHostState() }
     LaunchedEffect(Unit) { vm.messages.collect { snack.showSnackbar(it) } }
     // OTA: "new version" dialog (automatic check on start)
@@ -84,92 +98,148 @@ fun MainScaffold(vm: MainViewModel, ui: UiState) {
             dismissButton = { TextButton(onClick = { vm.dismissUpdateDialog() }) { Text(tr("Αργότερα", "Later")) } }
         )
     }
+    val wide = isWide()
+    val items = listOf(
+        NavItem(Icons.Filled.Home, tr("Αρχική", "Home")),
+        NavItem(Icons.Filled.Notifications, tr("Ειδοποιήσεις", "Alerts")),
+        NavItem(Icons.Filled.Tune, tr("Διαχείριση", "Manage")),
+        NavItem(Icons.Filled.Settings, tr("Ρυθμίσεις", "Settings")),
+    )
     Scaffold(
         snackbarHost = { SnackbarHost(snack) },
-        topBar = {
-            TopAppBar(
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            Modifier.size(10.dp).clip(CircleShape).background(
-                                when (ui.online) {
-                                    true -> OkC; false -> BadC; else -> Color.Gray
-                                }
-                            )
-                        )
-                        Spacer(Modifier.width(10.dp))
-                        Text("💧 AirSense", fontWeight = FontWeight.Bold)
-                    }
-                },
-                actions = {
-                    if (ui.busy) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
-                    IconButton(onClick = { vm.setTheme(nextTheme(ui.theme)) }) {
-                        Icon(
-                            when (ui.theme) {
-                                "dark" -> Icons.Filled.DarkMode; "light" -> Icons.Filled.LightMode
-                                "time" -> Icons.Filled.Schedule; else -> Icons.Filled.BrightnessAuto
-                            },
-                            contentDescription = tr("Θέμα", "Theme")
-                        )
-                    }
-                    IconButton(onClick = { vm.refreshNow() }) { Icon(Icons.Filled.Refresh, contentDescription = null) }
-                }
-            )
-        },
+        topBar = { AppTopBar(vm, ui) },
         bottomBar = {
-            NavigationBar {
-                val items = listOf(
-                    Triple(Icons.Filled.Home, tr("Αρχική", "Home"), 0),
-                    Triple(Icons.Filled.Notifications, tr("Ειδοποιήσεις", "Alerts"), 1),
-                    Triple(Icons.Filled.Tune, tr("Διαχείριση", "Manage"), 2),
-                    Triple(Icons.Filled.Settings, tr("Ρυθμίσεις", "Settings"), 3),
-                )
-                for ((icon, label, i) in items) {
+            if (!wide) NavigationBar {
+                items.forEachIndexed { i, it ->
                     NavigationBarItem(
                         selected = tab == i, onClick = { tab = i },
-                        icon = { Icon(icon, contentDescription = label) }, label = { Text(label) }
+                        icon = { Icon(it.icon, contentDescription = it.label) },
+                        label = { Text(it.label, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 11.sp) }
                     )
                 }
             }
         }
     ) { pad ->
-        Box(Modifier.padding(pad)) {
-            ui.updateProgress?.let { p ->
-                if (p >= 0f) LinearProgressIndicator(progress = { p }, modifier = Modifier.fillMaxWidth().zIndex(1f))
-                else LinearProgressIndicator(Modifier.fillMaxWidth().zIndex(1f))
+        Row(Modifier.padding(pad).fillMaxSize()) {
+            if (wide) {
+                NavigationRail(containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
+                    Spacer(Modifier.height(8.dp))
+                    items.forEachIndexed { i, it ->
+                        NavigationRailItem(
+                            selected = tab == i, onClick = { tab = i },
+                            icon = { Icon(it.icon, contentDescription = it.label) },
+                            label = { Text(it.label, maxLines = 1, fontSize = 11.sp) }
+                        )
+                    }
+                }
             }
-            when (tab) {
-                0 -> HomeScreen(vm, ui)
-                1 -> AlertsScreen(vm, ui)
-                2 -> ManageScreen(vm, ui)
-                else -> SettingsScreen(vm, ui)
+            Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.TopCenter) {
+                Box(Modifier.widthIn(max = 1280.dp).fillMaxSize()) {
+                    when (tab) {
+                        0 -> HomeScreen(vm, ui) { tab = 3 }
+                        1 -> AlertsScreen(vm, ui)
+                        2 -> ManageScreen(vm, ui)
+                        else -> SettingsScreen(vm, ui)
+                    }
+                    ui.updateProgress?.let { p ->
+                        if (p >= 0f) LinearProgressIndicator(progress = { p }, modifier = Modifier.fillMaxWidth().zIndex(1f))
+                        else LinearProgressIndicator(Modifier.fillMaxWidth().zIndex(1f))
+                    }
+                }
             }
         }
     }
+}
+
+/** Top bar: status dot + how we are connected (🏠 / 🌍) + Tailscale, theme, refresh. */
+@Composable
+fun AppTopBar(vm: MainViewModel, ui: UiState) {
+    val en = LocalEn.current
+    val dot = when (ui.online) { true -> OkC; false -> BadC; else -> MaterialTheme.colorScheme.outline }
+    val sub = when {
+        ui.online == true && ui.route == "tailscale" -> "🌍 Tailscale"
+        ui.online == true -> tr("🏠 Τοπικό δίκτυο", "🏠 Local network")
+        ui.online == false -> tr("Εκτός σύνδεσης", "Offline") + if (ui.lastOk > 0) " · " + agoText(ui.lastOk / 1000.0, en) else ""
+        else -> tr("Σύνδεση…", "Connecting…")
+    }
+    TopAppBar(
+        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(10.dp).clip(CircleShape).background(dot))
+                Spacer(Modifier.width(10.dp))
+                Column {
+                    Text("AirSense", fontWeight = FontWeight.Bold, fontSize = 20.sp, maxLines = 1)
+                    Text(sub, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis)
+                }
+            }
+        },
+        actions = {
+            if (ui.busy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+            if (ui.tsInstalled) {
+                IconButton(onClick = { vm.toggleTailscale() }) {
+                    Icon(Icons.Filled.VpnKey, contentDescription = "Tailscale",
+                        tint = if (ui.tsVpn) OkC else MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            IconButton(onClick = { vm.setTheme(nextTheme(ui.theme)) }) {
+                Icon(
+                    when (ui.theme) {
+                        "dark" -> Icons.Filled.DarkMode; "light" -> Icons.Filled.LightMode
+                        "time" -> Icons.Filled.Schedule; else -> Icons.Filled.BrightnessAuto
+                    },
+                    contentDescription = tr("Θέμα", "Theme")
+                )
+            }
+            IconButton(onClick = { vm.refreshNow() }) { Icon(Icons.Filled.Refresh, contentDescription = tr("Ανανέωση", "Refresh")) }
+        }
+    )
 }
 
 // ═════════════════════════ Κοινά ═════════════════════════
 @Composable
 fun SectionTitle(text: String) {
     Text(
-        text.uppercase(), style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(start = 4.dp, top = 14.dp, bottom = 6.dp)
+        text.uppercase(), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 0.8.sp,
+        modifier = Modifier.padding(start = 4.dp, top = 6.dp)
     )
 }
 
 @Composable
 fun HCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Card(modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
+    Card(
+        modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
         Column(Modifier.padding(16.dp), content = content)
     }
 }
 
+/** Responsive list: 1 column on phones, 2–3 on tablets / landscape (each card min 340 dp). */
+@Composable
+fun ResponsiveGrid(content: androidx.compose.foundation.lazy.grid.LazyGridScope.() -> Unit) {
+    androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+        columns = androidx.compose.foundation.lazy.grid.GridCells.Adaptive(340.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        content = content
+    )
+}
+
+/** A grid item that takes the whole row (titles, charts, lists). */
+fun androidx.compose.foundation.lazy.grid.LazyGridScope.full(key: Any? = null, content: @Composable () -> Unit) =
+    item(key = key, span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) { content() }
+
 @Composable
 fun StatusPill(text: String, color: Color) {
     Text(
-        text, color = color, fontSize = 12.sp,
-        modifier = Modifier.clip(RoundedCornerShape(50)).background(color.copy(alpha = 0.15f))
+        text, color = color, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+        modifier = Modifier.clip(RoundedCornerShape(50)).background(color.copy(alpha = 0.14f))
             .padding(horizontal = 10.dp, vertical = 3.dp)
     )
 }
@@ -269,7 +339,7 @@ fun ConnectionForm(vm: MainViewModel, onConnected: () -> Unit = {}) {
                 if (ok) onConnected()
             }
         }
-    ) { Icon(Icons.Filled.Search, null); Spacer(Modifier.width(6.dp)); Text(tr("🔍 Βρες αυτόματα (ίδιο WiFi)", "🔍 Find automatically (same WiFi)")) }
+    ) { Icon(Icons.Filled.Search, null); Spacer(Modifier.width(6.dp)); Text(tr("Βρες αυτόματα (ίδιο WiFi)", "Find automatically (same WiFi)")) }
     Spacer(Modifier.height(8.dp))
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedButton(onClick = { scan() }) {
@@ -297,8 +367,8 @@ fun ConnectionForm(vm: MainViewModel, onConnected: () -> Unit = {}) {
 @Composable
 fun SetupScreen(vm: MainViewModel) {
     var connected by remember { mutableStateOf(false) }
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).systemBarsPadding().padding(20.dp)
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) { Column(
+        Modifier.widthIn(max = 640.dp).fillMaxSize().verticalScroll(rememberScrollState()).systemBarsPadding().imePadding().padding(20.dp)
     ) {
         Text("💧", fontSize = 56.sp)
         Text(tr("Καλώς ήρθες στο AirSense", "Welcome to AirSense"), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
@@ -334,89 +404,175 @@ fun SetupScreen(vm: MainViewModel) {
         }
         Spacer(Modifier.height(16.dp))
         Text("Nikolaos K. Paridis (aka nikkpap) · ALU DEV TEAM", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
-    }
+    } }
 }
 
 // ═════════════════════════ Αρχική ═════════════════════════
 @Composable
-fun HomeScreen(vm: MainViewModel, ui: UiState) {
+fun HomeScreen(vm: MainViewModel, ui: UiState, onOpenSettings: () -> Unit = {}) {
     val ctx = LocalContext.current
     val en = LocalEn.current
     val st = ui.status
-    LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (ui.online == false) {
-            item {
-                HCard {
-                    Text(tr("⚠ Ο υπολογιστής δεν απαντά", "⚠ PC not reachable"), color = BadC, fontWeight = FontWeight.Bold)
-                    Text(ui.error ?: "", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-                    Text(
-                        tr("Είναι ανοιχτός ο υπολογιστής και το AirSense; Είσαι στο ίδιο WiFi ή με Tailscale;",
-                            "Is the PC and AirSense running? Same WiFi or Tailscale on?"), fontSize = 13.sp
-                    )
+    PullToRefreshBox(isRefreshing = ui.refreshing, onRefresh = { vm.refreshNow() }, modifier = Modifier.fillMaxSize()) {
+        ResponsiveGrid {
+            if (ui.online == false) full("offline") { OfflineCard(vm, ui, onOpenSettings) }
+            ui.weather?.let { w -> if (w.enabled && w.current != null) item(key = "wx") { WeatherCard(w) } }
+            if (st != null && st.devices.isEmpty()) {
+                full("empty") {
+                    HCard {
+                        Text(tr("Δεν υπάρχουν αισθητήρες ακόμα", "No sensors yet"), fontWeight = FontWeight.Bold)
+                        Text(tr("Πάτα «Σάρωση δικτύου» ή χρησιμοποίησε τον Οδηγό στον υπολογιστή.",
+                            "Tap “Scan network” or use the Wizard on the PC."),
+                            fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(10.dp))
+                        Button(onClick = { vm.post("/api/scan") }) {
+                            Icon(Icons.Filled.Search, null); Spacer(Modifier.width(8.dp)); Text(tr("Σάρωση δικτύου", "Scan network"))
+                        }
+                    }
                 }
             }
-        }
-        ui.weather?.let { w -> if (w.enabled && w.current != null) item { WeatherCard(w) } }
-        if (st != null && st.devices.isEmpty()) {
-            item {
-                HCard {
-                    Text(tr("Δεν υπάρχουν αισθητήρες ακόμα.", "No sensors yet."), fontWeight = FontWeight.Bold)
-                    Text(tr("Πάτα «Σάρωση δικτύου» ή χρησιμοποίησε τον Οδηγό στον υπολογιστή.",
-                        "Tap “Scan network” or use the Wizard on the PC."))
-                    Spacer(Modifier.height(8.dp))
-                    Button(onClick = { vm.post("/api/scan") }) { Text(tr("📡 Σάρωση δικτύου", "📡 Scan network")) }
-                }
+            if (st == null && ui.online == null) full("loading") {
+                Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             }
-        }
-        items(st?.devices ?: emptyList(), key = { it.id }) { d ->
-            DeviceCard(d, d.id == ui.selected, en, ui.weather) { vm.select(d.id) }
-        }
-        if (st != null && st.devices.isNotEmpty()) {
-            item {
-                HCard {
-                    Text(tr("Γράφημα", "Chart"), fontWeight = FontWeight.Bold)
-                    if (st.devices.size > 1) {
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            items(st.devices, key = { it.id }) { d ->
-                                FilterChip(selected = d.id == ui.selected, onClick = { vm.select(d.id) }, label = { Text(d.name) })
+            items(st?.devices ?: emptyList(), key = { it.id }) { d ->
+                DeviceCard(d, d.id == ui.selected && (st?.devices?.size ?: 0) > 1, en, ui.weather) { vm.select(d.id) }
+            }
+            if (st != null && st.devices.isNotEmpty()) {
+                full("chart") { ChartCard(vm, ui) }
+                full("actions") {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { vm.post("/api/poll") }) {
+                            Icon(Icons.Filled.Refresh, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(tr("Μέτρηση τώρα", "Measure now"))
+                        }
+                        for (k in listOf("pdf", "csv", "xml")) {
+                            OutlinedButton(onClick = { openUrl(ctx, vm.exportUrl(k)) }) {
+                                Icon(Icons.Filled.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(k.uppercase())
                             }
                         }
                     }
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        for ((h, l) in listOf(1 to tr("1ώ", "1h"), 6 to tr("6ώ", "6h"), 24 to tr("24ώ", "24h"),
-                            168 to tr("7 ημ", "7 d"), 720 to tr("30 ημ", "30 d"))) {
-                            FilterChip(selected = ui.hours == h, onClick = { vm.setHours(h) }, label = { Text(l) })
-                        }
-                    }
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("● " + tr("Θερμ.", "Temp") + " · " + lblIn(ui.weather?.labels), color = TempC, fontSize = 12.sp)
-                        Text("● " + tr("Υγρασία", "Humidity") + " · " + lblIn(ui.weather?.labels), color = HumC, fontSize = 12.sp)
-                        Text("┄ " + tr("Δρόσος", "Dew"), color = DewC, fontSize = 12.sp)
-                        Text("┄ " + lblOut(ui.weather?.labels), color = OutTC, fontSize = 12.sp)
-                        Text("▮ " + tr("Βροχή", "Rain"), color = HumC.copy(alpha = .7f), fontSize = 12.sp)
-                    }
-                    val ts = ui.points.mapNotNull { it.t }
-                    val hs = ui.points.mapNotNull { it.h }
-                    if (ts.isNotEmpty()) {
-                        Text(
-                            "${tr("Θερμ.", "Temp")} ${f(ts.min())}…${f(ts.max())} °C · ${tr("Υγρ.", "Hum.")} ${f(hs.minOrNull())}…${f(hs.maxOrNull())} %",
-                            fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Spacer(Modifier.height(6.dp))
-                    HygroChart(ui.points, ui.wxPoints, outLabel = lblOut(ui.weather?.labels))
                 }
             }
-            item {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { vm.post("/api/poll") }) { Icon(Icons.Filled.Refresh, null); Spacer(Modifier.width(6.dp)); Text(tr("Μέτρηση τώρα", "Measure now")) }
-                    OutlinedButton(onClick = { openUrl(ctx, vm.exportUrl("csv")) }) { Icon(Icons.Filled.Download, null); Spacer(Modifier.width(6.dp)); Text("CSV") }
-                    OutlinedButton(onClick = { openUrl(ctx, vm.exportUrl("xml")) }) { Icon(Icons.Filled.Download, null); Spacer(Modifier.width(6.dp)); Text("XML") }
-                    Button(onClick = { openUrl(ctx, vm.exportUrl("pdf")) }) { Icon(Icons.Filled.Download, null); Spacer(Modifier.width(6.dp)); Text("PDF") }
+            full("end") { Spacer(Modifier.height(8.dp)) }
+        }
+    }
+}
+
+/** The PC / board does not answer: why, and one-tap fixes. */
+@Composable
+fun OfflineCard(vm: MainViewModel, ui: UiState, onOpenSettings: () -> Unit) {
+    val bad = BadC
+    Card(
+        Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = bad.copy(alpha = 0.10f)),
+        border = BorderStroke(1.dp, bad.copy(alpha = 0.45f))
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.CloudOff, null, tint = bad)
+                Spacer(Modifier.width(10.dp))
+                Text(tr("Ο server του AirSense δεν απαντά", "AirSense server not reachable"), color = bad, fontWeight = FontWeight.Bold)
+            }
+            if (!ui.error.isNullOrBlank()) {
+                Text(ui.error, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, maxLines = 2,
+                    overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
+            }
+            Text(
+                if (ui.tsInstalled && !ui.tsVpn)
+                    tr("Είσαι εκτός σπιτιού; Άνοιξε το Tailscale.", "Away from home? Turn Tailscale on.")
+                else tr("Είναι αναμμένη η πλακέτα / το PC; Είσαι στο ίδιο WiFi ή με Tailscale;",
+                    "Is the board / PC on? Same WiFi or Tailscale on?"),
+                fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp)
+            )
+            Spacer(Modifier.height(10.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (ui.tsInstalled && !ui.tsVpn) {
+                    Button(onClick = { vm.toggleTailscale() }) {
+                        Icon(Icons.Filled.VpnKey, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(tr("Άνοιγμα Tailscale", "Turn on Tailscale"))
+                    }
+                }
+                OutlinedButton(onClick = { vm.refreshNow() }) {
+                    Icon(Icons.Filled.Refresh, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(tr("Ξανά", "Retry"))
+                }
+                TextButton(onClick = onOpenSettings) { Text(tr("Ρυθμίσεις σύνδεσης", "Connection settings")) }
+            }
+        }
+    }
+}
+
+@Composable
+fun ChartCard(vm: MainViewModel, ui: UiState) {
+    val st = ui.status ?: return
+    HCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(tr("Γράφημα", "Chart"), fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            val ts = ui.points.mapNotNull { it.t }
+            val hs = ui.points.mapNotNull { it.h }
+            if (ts.isNotEmpty()) {
+                Text("${f(ts.min())}…${f(ts.max())}°C · ${f(hs.minOrNull(), 0)}…${f(hs.maxOrNull(), 0)}%",
+                    fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            }
+        }
+        if (st.devices.size > 1) {
+            Spacer(Modifier.height(6.dp))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(st.devices, key = { it.id }) { d ->
+                    FilterChip(selected = d.id == ui.selected, onClick = { vm.select(d.id) },
+                        label = { Text(d.name, maxLines = 1, overflow = TextOverflow.Ellipsis) })
                 }
             }
         }
-        item { Spacer(Modifier.height(8.dp)) }
+        Spacer(Modifier.height(4.dp))
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            items(listOf(1 to tr("1ώ", "1h"), 6 to tr("6ώ", "6h"), 24 to tr("24ώ", "24h"), 168 to tr("7 ημ", "7 d"), 720 to tr("30 ημ", "30 d"))) { (h, l) ->
+                FilterChip(selected = ui.hours == h, onClick = { vm.setHours(h) }, label = { Text(l) })
+            }
+        }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(vertical = 4.dp)) {
+            Legend("●", tr("Θερμ.", "Temp") + " · " + lblIn(ui.weather?.labels), TempC)
+            Legend("●", tr("Υγρασία", "Humidity"), HumC)
+            Legend("┄", tr("Δρόσος", "Dew"), DewC)
+            Legend("┄", lblOut(ui.weather?.labels), OutTC)
+            Legend("▮", tr("Βροχή", "Rain"), HumC.copy(alpha = .75f))
+        }
+        HygroChart(ui.points, ui.wxPoints, outLabel = lblOut(ui.weather?.labels))
+        Text(tr("Άγγιξε ή σύρε στο γράφημα για τιμές", "Touch or drag on the chart for values"),
+            fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun Legend(mark: String, text: String, color: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(mark, color = color, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.width(4.dp))
+        Text(text, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+    }
+}
+
+/** Big value that shrinks by itself so it never overflows (narrow phones, -12.3, 100.0). */
+@Composable
+fun Metric(modifier: Modifier, label: String, value: String, unit: String, color: Color) {
+    Column(
+        modifier.clip(RoundedCornerShape(14.dp)).background(color.copy(alpha = if (LocalDark.current) 0.12f else 0.08f))
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    ) {
+        Text(label, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Row(verticalAlignment = Alignment.Bottom) {
+            BasicText(
+                value, modifier = Modifier.weight(1f, fill = false), maxLines = 1,
+                style = TextStyle(color = color, fontWeight = FontWeight.Bold),
+                autoSize = TextAutoSize.StepBased(minFontSize = 18.sp, maxFontSize = 38.sp)
+            )
+            Text(unit, color = color, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 2.dp, bottom = 4.dp))
+        }
+    }
+}
+
+@Composable
+private fun SmallStat(modifier: Modifier, label: String, value: String) {
+    Column(modifier) {
+        Text(label, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(value, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
 }
 
@@ -424,33 +580,36 @@ fun HomeScreen(vm: MainViewModel, ui: UiState) {
 fun DeviceCard(d: Device, selected: Boolean, en: Boolean, w: Weather? = null, onClick: () -> Unit) {
     Card(
         Modifier.fillMaxWidth().clickable { onClick() }, shape = RoundedCornerShape(18.dp),
-        border = if (selected) androidx.compose.foundation.BorderStroke(1.5.dp, Brand) else null
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
+        border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) Brand else MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(d.name, fontWeight = FontWeight.Bold, fontSize = 17.sp, modifier = Modifier.weight(1f))
+                Column(Modifier.weight(1f)) {
+                    Text(d.name, fontWeight = FontWeight.Bold, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("${d.ip} · ${agoText(d.ts, en)}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Spacer(Modifier.width(8.dp))
                 when (d.online) {
                     true -> StatusPill("online", OkC)
                     false -> StatusPill("offline", BadC)
-                    else -> StatusPill("…", Color.Gray)
+                    else -> StatusPill("…", MaterialTheme.colorScheme.outline)
                 }
             }
-            Spacer(Modifier.height(10.dp))
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text(f(d.t), color = TempC, fontSize = 42.sp, fontWeight = FontWeight.Bold)
-                Text(" °C", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
-                Spacer(Modifier.width(22.dp))
-                Text(f(d.h), color = HumC, fontSize = 42.sp, fontWeight = FontWeight.Bold)
-                Text(" %", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Metric(Modifier.weight(1f), tr("Θερμοκρασία", "Temperature"), f(d.t), "°C", TempC)
+                Metric(Modifier.weight(1f), tr("Υγρασία", "Humidity"), f(d.h), "%", HumC)
             }
-            Text(
-                "${if (en) "Dew point" else "Σημείο δρόσου"} ${f(d.dp)} °C · ${if (en) "Abs." else "Απόλυτη"} ${f(d.ah)} g/m³",
-                fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                SmallStat(Modifier.weight(1f), tr("Σημείο δρόσου", "Dew point"), "${f(d.dp)} °C")
+                SmallStat(Modifier.weight(1f), tr("Απόλυτη υγρασία", "Absolute humidity"), "${f(d.ah)} g/m³")
+            }
             val cw = w?.takeIf { it.enabled }?.current
             inOut(d.t, d.h, cw?.temp, cw?.hum)?.let { io -> InOutBox(io, w?.labels) }
-            Text("${d.ip} · ${agoText(d.ts, en)}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (d.online == false && d.error.isNotBlank()) Text(d.error, fontSize = 12.sp, color = BadC)
+            if (d.online == false && d.error.isNotBlank()) Text(d.error, fontSize = 12.sp, color = BadC, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -468,10 +627,10 @@ fun InOutBox(io: InOut, l: Labels?) {
             "Ventilating barely changes humidity")
     }
     Column(
-        Modifier.padding(vertical = 8.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .6f)).padding(10.dp)
+        Modifier.padding(top = 10.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = .45f)).padding(10.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        FlowRow(verticalArrangement = Arrangement.Center) {
             Text("↕ $li − $lo  ", fontSize = 13.sp, fontWeight = FontWeight.Bold)
             Text("${sg(io.dt)}°C", color = TempC, fontSize = 15.sp, fontWeight = FontWeight.Bold)
             Text("  ·  ", fontSize = 13.sp)
@@ -494,9 +653,8 @@ fun WeatherCard(w: Weather) {
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text("${f(c.temp)}°C", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = OutTC)
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                FlowRow(verticalArrangement = Arrangement.spacedBy(4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(c.text, fontSize = 14.sp)
-                    Spacer(Modifier.width(8.dp))
                     StatusPill(wxStatus(c.status), Brand)
                 }
             }
@@ -513,7 +671,7 @@ fun WeatherCard(w: Weather) {
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(w.daily) { d ->
                 Column(
-                    Modifier.clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant)
+                    Modifier.clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = .45f))
                         .padding(10.dp).width(78.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
